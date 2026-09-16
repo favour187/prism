@@ -6,6 +6,7 @@
   "main": "main.js",
   "author": "Prism",
   "license": "MIT",
+  "homepage": "https://github.com/favour187/prism",
   "scripts": {
     "start": "electron .",
     "dev": "PRISM_URL=http://localhost:5173 electron .",
