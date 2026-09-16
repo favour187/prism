@@ -50,7 +50,7 @@
       "category": "public.app-category.productivity"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": ["AppImage"],
       "icon": "build/icon.png",
       "category": "Utility"
     }
