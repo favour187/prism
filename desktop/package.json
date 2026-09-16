@@ -1,7 +1,7 @@
 {
   "name": "prism-desktop",
   "version": "1.0.0",
-  "description": "Prism Desktop — Arc-style floating AI screen assistant (global hotkey, captures, voice).",
+  "description": "Prism Desktop \u2014 Arc-style floating AI screen assistant (global hotkey, captures, voice).",
   "private": true,
   "main": "main.js",
   "author": {
@@ -39,7 +39,10 @@
       "output": "out"
     },
     "win": {
-      "target": ["nsis", "portable"],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "build/icon.png"
     },
     "nsis": {
@@ -48,14 +51,20 @@
       "shortcutName": "Prism"
     },
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "build/icon.png",
       "category": "public.app-category.productivity"
     },
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "icon": "build/icon.png",
       "category": "Utility"
-    }
+    },
+    "npmRebuild": false
   }
 }
