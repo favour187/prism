@@ -1,5 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
-import { VoiceRecorder, transcribe, voiceSupported } from '../voice.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { api } from '../api.js';
+import { VoiceRecorder, transcribe, voiceSupported, ttsSupported } from '../voice.js';
+
+const FALLBACK_STYLES = [
+  { id: 'fix', label: 'Fix grammar' },
+  { id: 'improve', label: 'Improve' },
+  { id: 'concise', label: 'Concise' },
+  { id: 'professional', label: 'Professional' },
+  { id: 'friendly', label: 'Friendly' },
+  { id: 'expand', label: 'Expand' },
+  { id: 'to_en', label: '→ English' },
+  { id: 'to_fr', label: '→ French' },
+];
 
 const ACCEPT =
   '.js,.mjs,.cjs,.jsx,.ts,.mts,.cts,.tsx,.py,.rb,.go,.rs,.java,.c,.h,.cc,.cpp,.hpp,.cs,.php,.swift,.kt,.kts,.scala,.dart,.lua,.r,.jl,.ex,.exs,.erl,.hs,.clj,.groovy,.pl,.sh,.bash,.zsh,.ps1,.sql,.html,.vue,.svelte,.css,.scss,.sass,.less,.json,.yaml,.yml,.toml,.ini,.cfg,.xml,.svg,.csv,.tsv,.md,.markdown,.txt,.log,.dockerfile,.tf,.hcl,.proto,.graphql,.prisma,.diff,.patch,.pdf,.docx,.png,.jpg,.jpeg,.webp,.gif';
@@ -32,13 +44,26 @@ export default function Composer({
   onClearAction,
   onAction,
   onOpenAssistant,
+  onNew,
+  speakOn,
+  onToggleSpeak,
   onToast,
 }) {
   const [text, setText] = useState('');
   const [mic, setMic] = useState('idle'); // idle | recording | transcribing
+  const [styles, setStyles] = useState(FALLBACK_STYLES);
+  const [styleBusy, setStyleBusy] = useState(null);
+  const [writeState, setWriteState] = useState(null); // { original }
+  const [palIndex, setPalIndex] = useState(0);
   const taRef = useRef(null);
   const fileRef = useRef(null);
   const recorderRef = useRef(null);
+
+  const desktop = window.prismDesktop ?? null;
+
+  useEffect(() => {
+    api.listWriteStyles().then((d) => d.styles?.length && setStyles(d.styles)).catch(() => {});
+  }, []);
 
   const toggleMic = async () => {
     if (mic === 'recording') {
@@ -79,9 +104,84 @@ export default function Composer({
     if (disabled) return;
     onSend({ content: text });
     setText('');
+    setWriteState(null);
+  };
+
+  // ---------------- command palette (type /) ----------------
+  const paletteOpen = text.startsWith('/');
+  const commands = useMemo(() => {
+    const list = [
+      { id: 'assistant', icon: '📸', label: 'Screen assistant', hint: 'capture, watch & narrate', run: onOpenAssistant },
+      ...(voiceSupported() ? [{ id: 'voice', icon: '🎤', label: 'Voice input', hint: 'dictate a message', run: toggleMic }] : []),
+      { id: 'attach', icon: '📎', label: 'Attach files', hint: 'code, docs, images', run: () => fileRef.current?.click() },
+      ...(ttsSupported() && onToggleSpeak ? [{
+        id: 'speak', icon: speakOn ? '🔇' : '🔊', label: `Spoken answers ${speakOn ? 'off' : 'on'}`,
+        hint: 'read replies aloud', run: onToggleSpeak,
+      }] : []),
+      ...(onNew ? [{ id: 'new', icon: '＋', label: 'New conversation', hint: 'clear and start over', run: onNew }] : []),
+    ];
+    const q = text.slice(1).trim().toLowerCase();
+    return q ? list.filter((c) => c.id.includes(q) || c.label.toLowerCase().includes(q)) : list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, speakOn, onNew, onToggleSpeak, onOpenAssistant]);
+
+  useEffect(() => { setPalIndex(0); }, [text]);
+
+  // ---------------- inline write (type text → style chips) ----------------
+  const writeChipsOpen = Boolean(text.trim()) && !paletteOpen && !disabled;
+  const transformed = writeState && text !== writeState.original;
+
+  const runInlineWrite = async (style) => {
+    const source = text.trim();
+    if (!source || styleBusy) return;
+    setStyleBusy(style.id);
+    try {
+      const d = await api.write(source, style.id);
+      setWriteState((prev) => prev ?? { original: text });
+      setText(d.result);
+    } catch (err) {
+      onToast?.(err.message ?? 'Rewrite failed.', 'error');
+    } finally {
+      setStyleBusy(null);
+    }
+  };
+
+  const insertTransformed = async () => {
+    const payload = text.trim();
+    if (!payload) return;
+    if (desktop?.writeText) {
+      const res = await desktop.writeText(payload).catch(() => ({ copied: false, pasted: false }));
+      onToast?.(res.pasted ? 'Inserted into your app ✓' : 'Copied — paste with Ctrl/⌘+V.', 'success');
+    } else {
+      await navigator.clipboard.writeText(payload).catch(() => {});
+      onToast?.('Copied — paste anywhere with Ctrl/⌘+V.', 'success');
+    }
+    setText('');
+    setWriteState(null);
   };
 
   const onKeyDown = (e) => {
+    if (paletteOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!commands.length) return;
+        setPalIndex((i) => (i + (e.key === 'ArrowDown' ? 1 : -1) + commands.length) % commands.length);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const cmd = commands[Math.min(palIndex, commands.length - 1)];
+        setText('');
+        cmd?.run?.();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setText('');
+      }
+      return;
+    }
+    if (e.key === 'Escape' && transformed) {
+      setText(writeState.original);
+      setWriteState(null);
+      return;
+    }
     if ((e.key === 'Enter' && !e.shiftKey) || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
       e.preventDefault();
       submit();
@@ -122,6 +222,48 @@ export default function Composer({
               <button className="chip-x" onClick={() => onRemoveFile(f.id)} title="Remove file">×</button>
             </span>
           ))}
+        </div>
+      )}
+
+      {paletteOpen && (
+        <div className="ov-palette composer-palette" role="listbox" aria-label="Commands">
+          {commands.map((c, i) => (
+            <button
+              key={c.id}
+              className={`ov-palette-item ${i === Math.min(palIndex, commands.length - 1) ? 'active' : ''}`}
+              onMouseEnter={() => setPalIndex(i)}
+              onClick={() => { setText(''); c.run(); }}
+            >
+              <span className="ov-palette-icon">{c.icon}</span>
+              <span className="ov-palette-label">{c.label}</span>
+              <span className="ov-palette-hint">{c.hint}</span>
+            </button>
+          ))}
+          {!commands.length && <div className="ov-palette-empty">No matching command.</div>}
+        </div>
+      )}
+
+      {writeChipsOpen && (
+        <div className="ov-chips composer-chips">
+          {styles.map((s) => (
+            <button
+              key={s.id}
+              className={`ov-chip ${styleBusy === s.id ? 'busy' : ''}`}
+              disabled={Boolean(styleBusy)}
+              title={s.hint ?? ''}
+              onClick={() => runInlineWrite(s)}
+            >
+              {s.label}{styleBusy === s.id && <span className="spinner" />}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {transformed && !paletteOpen && (
+        <div className="ov-bar-actions composer-bar-actions">
+          <button className="btn primary small" onClick={insertTransformed}>⤓ Insert into app</button>
+          <button className="btn ghost small" onClick={() => { setText(writeState.original); setWriteState(null); }} title="Restore what you typed (Esc)">↺ Original</button>
+          <button className="btn ghost small" onClick={async () => { await navigator.clipboard.writeText(text).catch(() => {}); onToast?.('Copied.', 'success'); }}>Copy</button>
         </div>
       )}
 
@@ -178,7 +320,7 @@ export default function Composer({
           placeholder={
             pendingAction
               ? `${ACTIONS.find((a) => a.id === pendingAction.action)?.label} what? (optional note, Enter to run)`
-              : 'Ask anything — code, errors, architecture… (Enter to send, Shift+Enter for newline)'
+              : 'Ask anything · / for commands · typed text gets write styles'
           }
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}

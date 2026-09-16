@@ -86,15 +86,24 @@ function toggleWindow() {
   }
 }
 
-/** Hide the panel, wait for compositing, capture, restore. */
+/** Hide the panel (+ HUD), wait for compositing, capture, restore. */
 async function withHiddenWindow(fn) {
-  const wasVisible = win?.isVisible();
-  if (wasVisible) win.hide();
+  const hidden = [];
+  for (const w of [win, edgeWin, circleWin]) {
+    if (w && !w.isDestroyed() && w.isVisible()) {
+      w.hide();
+      hidden.push(w);
+    }
+  }
   await new Promise((r) => setTimeout(r, 220));
   try {
     return await fn();
   } finally {
-    if (wasVisible && win && !win.isDestroyed()) win.show();
+    for (const w of hidden) {
+      if (w.isDestroyed()) continue;
+      if (w === win) w.show();
+      else w.showInactive(); // HUD never steals focus from your apps
+    }
   }
 }
 
@@ -363,6 +372,72 @@ function presentOverlay(channel, payload) {
   }
 }
 
+// ------------------- HUD: edge line + circle launcher ----------------------
+// Mouse-first affordances so the hotkeys are never required:
+//  • edge line — a thin strip pinned to the right screen edge; click toggles
+//    the assistant panel, drag repositions it vertically.
+//  • circle — an obvious always-visible launcher that opens the main app.
+// Opt out with PRISM_EDGE=0 / PRISM_LAUNCHER=0.
+
+let edgeWin = null;
+let circleWin = null;
+let edgeDragBase = null;
+
+function hudWindow(kind, { width, height, x, y }) {
+  const w = new BrowserWindow({
+    width, height, x, y,
+    frame: false,
+    transparent: true,
+    show: false,
+    resizable: false,
+    movable: false,
+    focusable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    hasShadow: false,
+    fullscreenable: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'hud-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  w.setAlwaysOnTop(true, 'screen-saver');
+  w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  w.loadFile(path.join(__dirname, 'hud.html'), { query: { hud: kind } });
+  w.once('ready-to-show', () => w.showInactive());
+  return w;
+}
+
+function hudHome() {
+  const area = currentDisplay().workArea;
+  return {
+    edge: { x: area.x + area.width - 14, y: Math.round(area.y + area.height / 2 - 66) },
+    circle: { x: area.x + 18, y: area.y + area.height - 70 },
+  };
+}
+
+function createHud() {
+  if (process.env.PRISM_EDGE !== '0' && !edgeWin) {
+    edgeWin = hudWindow('edge', { width: 14, height: 132, ...hudHome().edge });
+    edgeWin.on('closed', () => { edgeWin = null; });
+  }
+  if (process.env.PRISM_LAUNCHER !== '0' && !circleWin) {
+    circleWin = hudWindow('circle', { width: 52, height: 52, ...hudHome().circle });
+    circleWin.on('closed', () => { circleWin = null; });
+  }
+}
+
+ipcMain.on('hud:toggle-overlay', toggleWindow);
+ipcMain.on('hud:open-main', () => shell.openExternal(PRISM_URL));
+ipcMain.on('hud:drag-edge', (_e, dy) => {
+  if (!edgeWin || edgeWin.isDestroyed()) return;
+  const [, y] = edgeWin.getPosition();
+  if (edgeDragBase == null) edgeDragBase = y;
+  edgeWin.setPosition(hudHome().edge.x, edgeDragBase + Math.round(Number(dy) || 0));
+});
+ipcMain.on('hud:drag-end', () => { edgeDragBase = null; });
+
 // ------------------------------- lifecycle ---------------------------------
 
 const gotLock = app.requestSingleInstanceLock();
@@ -391,6 +466,7 @@ if (!gotLock) {
     }
 
     createWindow();
+    createHud(); // edge line + circle launcher — click, no hotkeys required
     const ok = globalShortcut.register(SHORTCUT, toggleWindow);
     if (!ok) console.warn('[prism-desktop] could not register', SHORTCUT);
     globalShortcut.register('CommandOrControl+Shift+Q', () => app.quit());

@@ -210,6 +210,19 @@ async function main() {
       body: JSON.stringify({ text: '  ', style: 'fix' }),
     });
     assert(wrEmpty.status === 400, 'empty text is a structured 400');
+    const wrInst = await fetch(`${BASE}/api/write`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'the app is bad', instruction: 'turn this into constructive feedback' }),
+    });
+    const wrInstJson = await wrInst.json();
+    assert(wrInst.status === 200 && wrInstJson.style === 'custom' && wrInstJson.result.length > 0, 'free-form instruction transforms text');
+    const wrTooLong = await fetch(`${BASE}/api/write`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'hello', instruction: 'x'.repeat(600) }),
+    });
+    assert(wrTooLong.status === 400, 'over-long instruction is a structured 400');
 
     // ---- privacy export ----
     console.log('• privacy');

@@ -1,21 +1,70 @@
-import { useEffect, useState } from 'react';
-import { grabFrame } from '../capture.js';
+import { useEffect, useRef, useState } from 'react';
+import { grabFrame, ScreenWatcher } from '../capture.js';
 import RegionSelector from './RegionSelector.jsx';
 
 /**
- * Floating screen assistant panel (web app mode).
+ * Screen assistant (web app mode).
  *
- * Privacy by design: the screen is NEVER recorded. A frame is captured only
- * when the user explicitly clicks a capture mode, using the browser picker
- * (getDisplayMedia) which itself asks which screen/window/tab to share.
+ * Toggled by a thin EDGE LINE on the right edge of the window — no floating
+ * circle, no hotkey required. Nothing is recorded: a frame is captured only
+ * on an explicit click, or — in Watch mode — kept only when the screen
+ * visibly moves, with optional one-line AI narration into the chat.
  */
-export default function ScreenAssistant({ open, onToggle, onClose, onCapture, onError }) {
+export default function ScreenAssistant({ open, onToggle, onClose, onCapture, onError, onWatchNarrate, streaming }) {
   const [busy, setBusy] = useState(null); // 'full' | 'window' | 'region'
   const [preview, setPreview] = useState(null);
   const [awaitingRegion, setAwaitingRegion] = useState(null);
+  const [watch, setWatch] = useState(null); // { count }
+  const [narrate, setNarrate] = useState(() => localStorage.getItem('prism.watchNarrate') !== '0');
+  const watcherRef = useRef(null);
+  const narrateRef = useRef(narrate);
+  const streamingRef = useRef(streaming);
+  narrateRef.current = narrate;
+  streamingRef.current = streaming;
 
   useEffect(() => {
-    if (!open) { setPreview(null); setAwaitingRegion(null); setBusy(null); }
+    localStorage.setItem('prism.watchNarrate', narrate ? '1' : '0');
+  }, [narrate]);
+
+  const stopWatch = () => {
+    watcherRef.current?.stop();
+    watcherRef.current = null;
+    setWatch(null);
+  };
+
+  useEffect(() => () => watcherRef.current?.stop(), []);
+
+  const toggleWatch = async () => {
+    if (watcherRef.current) {
+      const n = watch?.count ?? 0;
+      stopWatch();
+      onError?.(`Watch stopped — ${n} change${n === 1 ? '' : 's'} captured.`);
+      return;
+    }
+    const watcher = new ScreenWatcher({ threshold: 7 });
+    try {
+      await watcher.start({
+        onChange: ({ dataUrl, n }) => {
+          setWatch(() => ({ count: n }));
+          setPreview(dataUrl);
+          if (narrateRef.current && !streamingRef.current) {
+            onWatchNarrate?.(dataUrl, n);
+          }
+        },
+        onTick: (avg) => {
+          if (avg < 0) stopWatch();
+        },
+      });
+      watcherRef.current = watcher;
+      setWatch({ count: 0 });
+    } catch (err) {
+      onError?.(err?.name === 'NotAllowedError' ? 'Watch needs capture permission.' : `Watch failed: ${err.message}`);
+    }
+  };
+
+  useEffect(() => {
+    if (!open) { setPreview(null); setAwaitingRegion(null); setBusy(null); stopWatch(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const capture = async (mode) => {
@@ -44,7 +93,19 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
     onClose();
   };
 
-  if (!open && !awaitingRegion) return null;
+  if (!open && !awaitingRegion) {
+    // The closed state is just the edge line.
+    return (
+      <button
+        className="assistant-edge"
+        onClick={onToggle}
+        title="Prism screen assistant — click to open"
+        aria-label="Open screen assistant"
+      >
+        <span className="assistant-edge-line" aria-hidden="true" />
+      </button>
+    );
+  }
 
   return (
     <>
@@ -66,8 +127,22 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
           <div className="assistant-body">
             <p className="assistant-note">
               Nothing is recorded. A single frame is captured only when you pick a mode —
-              your browser will ask which screen, window, or tab to share.
+              or, in Watch, kept only when the screen visibly moves.
             </p>
+
+            <div className={`assistant-watch ${watch ? 'on' : ''}`}>
+              <button className="capture-mode watch" disabled={Boolean(busy)} onClick={toggleWatch}>
+                <span className="capture-icon">◉</span>
+                <span>{watch ? `Watching · ${watch.count} kept` : 'Watch the screen'}</span>
+                <small>{watch ? 'click to stop' : 'keeps a shot only on movement'}</small>
+              </button>
+              {watch && (
+                <label className="assistant-narrate">
+                  <input type="checkbox" checked={narrate} onChange={(e) => setNarrate(e.target.checked)} />
+                  ✨ narrate changes into the chat
+                </label>
+              )}
+            </div>
 
             {!preview ? (
               <div className="capture-modes">
@@ -93,30 +168,26 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
             ) : (
               <div className="capture-preview">
                 <img src={preview} alt="Screenshot preview before sending" className="preview-img" />
-                <p className="preview-label">Preview — review before sending</p>
+                <p className="preview-label">{watch ? 'Latest Watch shot' : 'Preview — review before sending'}</p>
                 <div className="preview-actions">
                   <button className="btn primary" onClick={attach}>Attach to composer</button>
-                  <button className="btn ghost" onClick={() => setPreview(null)}>Retake</button>
+                  {!watch && <button className="btn ghost" onClick={() => setPreview(null)}>Retake</button>}
                   <button className="btn ghost danger" onClick={() => setPreview(null)}>Discard</button>
                 </div>
               </div>
             )}
-
-            <div className="assistant-foot">
-              <kbd className="kbd">Ctrl/⌘ + Shift + A</kbd> toggles this panel
-            </div>
           </div>
         </section>
       )}
 
-      {/* Floating action button — always visible while the app is open */}
+      {/* Edge line toggle — a straight line at the window edge, always clickable */}
       <button
-        className={`assistant-fab ${open ? 'active' : ''}`}
+        className={`assistant-edge ${open ? 'open' : ''}`}
         onClick={onToggle}
-        title="Screen assistant (Ctrl/⌘+Shift+A)"
+        title={open ? 'Close screen assistant' : 'Prism screen assistant — click to open'}
         aria-label={open ? 'Close screen assistant' : 'Open screen assistant'}
       >
-        📸
+        <span className="assistant-edge-line" aria-hidden="true" />
       </button>
     </>
   );

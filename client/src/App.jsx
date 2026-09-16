@@ -7,6 +7,11 @@ import MessageList from './components/MessageList.jsx';
 import Composer from './components/Composer.jsx';
 import ScreenAssistant from './components/ScreenAssistant.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
+import WriteDesk from './components/WriteDesk.jsx';
+
+const WATCH_NARRATION_PROMPT =
+  'Watch narration: in ONE short sentence, describe what visibly changed on the screen. ' +
+  'Be concrete — name the app, dialog, or content that changed. No preamble.';
 
 export default function App() {
   const [cfg, setCfg] = useState(null);
@@ -22,6 +27,7 @@ export default function App() {
   const [pendingScreenshots, setPendingScreenshots] = useState([]); // {id, dataUrl, name}
   const [pendingAction, setPendingAction] = useState(null); // { action, selection }
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [view, setView] = useState('chat'); // 'chat' | 'write'
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [model, setModel] = useState(() => localStorage.getItem('prism.model') ?? '');
   const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('prism.autospeak') !== '0');
@@ -235,6 +241,61 @@ export default function App() {
     document.querySelector('.composer textarea')?.focus();
   }, [showToast]);
 
+  /** Watch-mode narration: a background turn describing the visual change. */
+  const narrateShot = useCallback((dataUrl, n) => {
+    if (stream) return; // never interrupt a user's turn with a narration
+    stopSpeaking();
+    streamTextRef.current = '';
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `local-${Date.now()}-w${n}`,
+        role: 'user',
+        content: `🎥 Screen changed — shot #${n}\n\n![watch](${dataUrl})`,
+        createdAt: Date.now(),
+        meta: { watch: true },
+        attachments: [],
+      },
+    ]);
+    setStream({ text: '', meta: null, error: null });
+    let sawConvo = activeId;
+    abortRef.current = streamChat(
+      { conversationId: activeId, content: WATCH_NARRATION_PROMPT, screenshots: [dataUrl], model: model || null },
+      {
+        onMeta: (meta) => {
+          if (meta.conversationId && meta.conversationId !== sawConvo) {
+            sawConvo = meta.conversationId;
+            setActiveId(meta.conversationId);
+          }
+          setStream((s) => (s ? { ...s, meta: { ...(s.meta ?? {}), ...meta } } : s));
+        },
+        onDelta: (delta) => {
+          streamTextRef.current += delta;
+          setStream((s) => (s ? { ...s, text: s.text + delta } : s));
+        },
+        onNotice: (notice) => showToast(notice, 'info'),
+        onError: (err) => setStream((s) => (s ? { ...s, error: err } : { text: '', meta: null, error: err })),
+        onDone: async (done) => {
+          setStream(null);
+          const finalText = streamTextRef.current;
+          if (done?.conversationId) {
+            try {
+              const data = await api.getConversation(done.conversationId);
+              setMessages(data.messages);
+            } catch { /* keep optimistic view */ }
+          }
+          if (autoSpeak && finalText && ttsSupported()) speak(finalText).catch(() => {});
+        },
+      },
+    );
+  }, [stream, activeId, model, autoSpeak, showToast]);
+
+  /** Write desk → chat handoff: ask the model to review the draft. */
+  const discussDraft = useCallback((docText) => {
+    setView('chat');
+    sendMessage({ content: `Review this draft and suggest improvements — be specific:\n\n${String(docText).slice(0, 8000)}` });
+  }, [sendMessage]);
+
   // Screenshot captured in the floating assistant
   const onScreenshot = useCallback((dataUrl, name = 'screenshot.png') => {
     setPendingScreenshots((prev) => [
@@ -312,28 +373,57 @@ export default function App() {
           </div>
         )}
 
-        <MessageList
-          messages={messages}
-          stream={stream}
-          onCodeAction={onCodeAction}
-        />
+        <div className="view-tabs" role="tablist" aria-label="Workspace">
+          <button
+            role="tab" aria-selected={view === 'chat'}
+            className={`view-tab ${view === 'chat' ? 'active' : ''}`}
+            onClick={() => setView('chat')}
+          >💬 Chat</button>
+          <button
+            role="tab" aria-selected={view === 'write'}
+            className={`view-tab ${view === 'write' ? 'active' : ''}`}
+            onClick={() => setView('write')}
+          >✍️ Write</button>
+        </div>
 
-        <Composer
-          disabled={!canSend}
-          streaming={Boolean(stream)}
-          onSend={sendMessage}
-          onStop={stopStreaming}
-          onFiles={addFiles}
-          pendingFiles={pendingFiles}
-          onRemoveFile={(id) => setPendingFiles((p) => p.filter((f) => f.id !== id))}
-          screenshots={pendingScreenshots}
-          onRemoveScreenshot={(id) => setPendingScreenshots((p) => p.filter((s) => s.id !== id))}
-          pendingAction={pendingAction}
-          onClearAction={() => setPendingAction(null)}
-          onAction={(action) => setPendingAction({ action, selection: '' })}
-          onOpenAssistant={() => setAssistantOpen(true)}
-          onToast={showToast}
-        />
+        {view === 'write' ? (
+          <WriteDesk onDiscuss={discussDraft} onToast={showToast} />
+        ) : (
+          <>
+            <MessageList
+              messages={messages}
+              stream={stream}
+              onCodeAction={onCodeAction}
+            />
+
+            <Composer
+              disabled={!canSend}
+              streaming={Boolean(stream)}
+              onSend={sendMessage}
+              onStop={stopStreaming}
+              onFiles={addFiles}
+              pendingFiles={pendingFiles}
+              onRemoveFile={(id) => setPendingFiles((p) => p.filter((f) => f.id !== id))}
+              screenshots={pendingScreenshots}
+              onRemoveScreenshot={(id) => setPendingScreenshots((p) => p.filter((s) => s.id !== id))}
+              pendingAction={pendingAction}
+              onClearAction={() => setPendingAction(null)}
+              onAction={(action) => setPendingAction({ action, selection: '' })}
+              onOpenAssistant={() => setAssistantOpen(true)}
+              onNew={newConversation}
+              speakOn={autoSpeak}
+              onToggleSpeak={() => {
+                setAutoSpeak((v) => {
+                  const next = !v;
+                  localStorage.setItem('prism.autospeak', next ? '1' : '0');
+                  if (!next) stopSpeaking();
+                  return next;
+                });
+              }}
+              onToast={showToast}
+            />
+          </>
+        )}
       </main>
 
       <ScreenAssistant
@@ -342,6 +432,8 @@ export default function App() {
         onClose={() => setAssistantOpen(false)}
         onCapture={onScreenshot}
         onError={(msg) => showToast(msg, 'error')}
+        onWatchNarrate={narrateShot}
+        streaming={Boolean(stream)}
       />
 
       {settingsOpen && (

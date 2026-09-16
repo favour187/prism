@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; user-select: none; }
+  body.edge { display: flex; align-items: center; justify-content: flex-end; }
+  .edge-line {
+    width: 5px; height: 100%; border-radius: 3px;
+    background: linear-gradient(180deg, #7c8cff, #b06bff);
+    opacity: .5; cursor: pointer; transition: opacity .15s ease, width .15s ease;
+  }
+  body.edge:hover .edge-line { opacity: 1; width: 8px; }
+  body.circle { display: grid; place-items: center; }
+  .circle-btn {
+    width: 44px; height: 44px; border-radius: 50%; cursor: pointer;
+    background: radial-gradient(circle at 30% 28%, #8f9dff, #6b5bd6 60%, #4a3fa8);
+    box-shadow: 0 4px 18px rgba(90, 90, 220, .45), inset 0 0 0 1.5px rgba(255,255,255,.22);
+    display: grid; place-items: center; transition: transform .12s ease;
+  }
+  .circle-btn:hover { transform: scale(1.08); }
+  .circle-gem { width: 14px; height: 14px; border-radius: 4px; background: rgba(255,255,255,.92); transform: rotate(45deg); }
+</style>
+</head>
+<body>
+  <script>
+    const mode = new URLSearchParams(location.search).get('hud') || 'edge';
+    document.body.classList.add(mode);
+    const el = document.createElement('div');
+    if (mode === 'edge') {
+      el.className = 'edge-line';
+      el.title = 'Prism assistant — click to open, drag to move';
+    } else {
+      el.className = 'circle-btn';
+      el.title = 'Open the Prism app';
+      const gem = document.createElement('div');
+      gem.className = 'circle-gem';
+      el.appendChild(gem);
+    }
+    document.body.appendChild(el);
+
+    const hud = window.prismHud;
+    // click vs drag: >6px of movement counts as a drag, not a click
+    let downY = null, dragged = false;
+    el.addEventListener('mousedown', (e) => { downY = e.screenY; dragged = false; e.preventDefault(); });
+    window.addEventListener('mousemove', (e) => {
+      if (downY == null) return;
+      const dy = e.screenY - downY;
+      if (Math.abs(dy) > 6) dragged = true;
+      if (mode === 'edge' && dragged) hud?.dragEdge?.(Math.round(dy));
+    });
+    window.addEventListener('mouseup', () => {
+      if (downY == null) return;
+      const wasDrag = dragged;
+      downY = null; dragged = false;
+      if (mode === 'edge') hud?.endDrag?.();
+      if (!wasDrag) (mode === 'edge' ? hud?.toggleOverlay : hud?.openMainApp)?.();
+    });
+  </script>
+</body>
+</html>

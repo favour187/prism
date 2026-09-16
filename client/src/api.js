@@ -22,6 +22,8 @@ export const api = {
   listWriteStyles: () => jsonFetch('/api/write/styles'),
   write: (text, style) =>
     jsonFetch('/api/write', { method: 'POST', body: JSON.stringify({ text, style }) }),
+  writeInstruction: (text, instruction) =>
+    jsonFetch('/api/write', { method: 'POST', body: JSON.stringify({ text, instruction }) }),
 
   listConversations: (query = '') =>
     jsonFetch(`/api/conversations${query ? `?query=${encodeURIComponent(query)}` : ''}`),

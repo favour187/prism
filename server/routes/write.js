@@ -33,6 +33,7 @@ const PROMPTS = {
 };
 
 const MAX_TEXT_CHARS = 20_000;
+const MAX_INSTRUCTION_CHARS = 500;
 
 /** GET /api/write/styles — what the bar renders. */
 router.get('/styles', (_req, res) => {
@@ -41,22 +42,34 @@ router.get('/styles', (_req, res) => {
 
 /**
  * POST /api/write
- * Body: { text: string, style: 'fix'|'improve'|... }
+ * Body: { text: string, style?: 'fix'|'improve'|..., instruction?: string }
+ *  — style applies a preset transform; instruction is a free-form directive
+ *    ("turn this into a polite rejection email"). Exactly one is required.
  * → 200 { result, style, model, provider }
  */
 router.post('/', chatLimiter, async (req, res, next) => {
   try {
-    const { text = '', style = 'improve' } = req.body ?? {};
+    const { text = '', style = null, instruction = null } = req.body ?? {};
     if (typeof text !== 'string' || !text.trim()) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Provide "text" to rewrite.' } });
     }
     if (text.length > MAX_TEXT_CHARS) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: `Text too long (max ${MAX_TEXT_CHARS} chars).` } });
     }
-    const prompt = PROMPTS[style];
-    if (!prompt) {
+
+    let prompt;
+    let usedStyle = style;
+    if (instruction != null) {
+      if (typeof instruction !== 'string' || !instruction.trim() || instruction.length > MAX_INSTRUCTION_CHARS) {
+        return res.status(400).json({ error: { code: 'BAD_REQUEST', message: `instruction must be a string of at most ${MAX_INSTRUCTION_CHARS} chars.` } });
+      }
+      prompt = `${instruction.trim()}\nRules: transform the text below accordingly. Return ONLY the resulting text — no commentary.`;
+      usedStyle = 'custom';
+    } else if (typeof style === 'string' && PROMPTS[style]) {
+      prompt = PROMPTS[style];
+    } else {
       return res.status(400).json({
-        error: { code: 'BAD_REQUEST', message: `Unknown style "${String(style)}". One of: ${Object.keys(PROMPTS).join(', ')}.` },
+        error: { code: 'BAD_REQUEST', message: `Provide "style" (${Object.keys(PROMPTS).join(', ')}) or a free-form "instruction".` },
       });
     }
 
@@ -83,7 +96,7 @@ router.post('/', chatLimiter, async (req, res, next) => {
     }
     res.json({
       result: trimmed,
-      style,
+      style: usedStyle,
       model: provider.id === 'mock' ? 'mock/chat-demo' : config.featherless.chatModel,
       provider: provider.id,
     });

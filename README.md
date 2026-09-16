@@ -32,7 +32,9 @@ Powered by **Featherless AI** · Streaming SSE · Vision + OCR fallback · SQLit
 
 ### 📸 Screen assistant — one bar, everywhere
 - **Ctrl/⌘ + Shift + A** toggles the floating assistant panel (always-on-top in the desktop/Android apps).
-- **One universal command bar**: type to ask · **`/`** opens the command palette (watch, screenshot, window, region, voice, spoken answers, new thread) · typed text surfaces **inline write-style chips** that rewrite it in place.
+- **One universal command bar — in the overlay AND the main app**: type to ask · **`/`** opens the command palette (assistant, voice, files, spoken answers…) · typed text surfaces **inline write-style chips** that rewrite it in place (Enter sends, Esc restores).
+- **Write tab in the main app** (the "other things"): a full writing desk — draft anything, transform with style chips or a **free-form instruction** ("make this a polite rejection email"), undo freely, then copy / insert / download / **Discuss in chat** for a review pass.
+- **Click, never hotkeys (if you don't want them)**: the assistant toggles from a **thin edge line** at the screen edge (draggable), and the desktop app adds an obvious **circle launcher** into the main app. Hotkeys still work everywhere for power users.
 - **Arc-style writing, system-wide (desktop)**: select text in **any app** → **Ctrl/⌘+Shift+R** → a floating bar rewrites it → **Enter pastes it straight back** into that app. **Ctrl/⌘+Shift+G** asks about the selection. **Ctrl/⌘+Shift+W** toggles Watch from anywhere.
 - **◉ Watch mode** (opt-in): samples your screen and keeps a screenshot **only when something visibly moves** — with optional ✨ **narration**, the vision model describes each change in the thread as it happens. Sensitivity low/med/high.
 - **Panel sizing**: live measurements, S/M/L presets, drag-to-resize (desktop).
