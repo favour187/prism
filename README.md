@@ -30,14 +30,14 @@ Powered by **Featherless AI** · Streaming SSE · Vision + OCR fallback · SQLit
 - Prism **speaks the answers aloud** (system voice; markdown-aware: code blocks are summarized, not spelled out) — toggle 🔊/🔇 in the header
 - Works in the web app, the desktop overlay, and the Android panel
 
-### 📸 Screen assistant
-- **Ctrl/⌘ + Shift + A** toggles the floating assistant panel (always-on-top when using the desktop shell).
-- Capture modes: **full screen**, **window/tab**, or **region** (drag-select crop).
-- **◉ Watch mode** (opt-in): samples your screen on an interval and keeps a screenshot **only when something visibly moves** — local frame differencing; static frames are discarded instantly. Sensitivity: low/med/high.
-- **✍️ Write mode**: rewrite text (grammar, tone, brevity, translation) via the model and **insert it straight into the app you were using** (true keystroke paste on desktop; clipboard fallback everywhere else).
+### 📸 Screen assistant — one bar, everywhere
+- **Ctrl/⌘ + Shift + A** toggles the floating assistant panel (always-on-top in the desktop/Android apps).
+- **One universal command bar**: type to ask · **`/`** opens the command palette (watch, screenshot, window, region, voice, spoken answers, new thread) · typed text surfaces **inline write-style chips** that rewrite it in place.
+- **Arc-style writing, system-wide (desktop)**: select text in **any app** → **Ctrl/⌘+Shift+R** → a floating bar rewrites it → **Enter pastes it straight back** into that app. **Ctrl/⌘+Shift+G** asks about the selection. **Ctrl/⌘+Shift+W** toggles Watch from anywhere.
+- **◉ Watch mode** (opt-in): samples your screen and keeps a screenshot **only when something visibly moves** — with optional ✨ **narration**, the vision model describes each change in the thread as it happens. Sensitivity low/med/high.
 - **Panel sizing**: live measurements, S/M/L presets, drag-to-resize (desktop).
 - **Privacy by design: no continuous recording.** Captures — single or motion-triggered — only happen when you start them.
-- Captures are routed through the vision model → with **OCR fallback** (Tesseract) if the vision model is unavailable, so terminal output / error dialogs still get analyzed.
+- Captures route through the vision model → **OCR fallback** (Tesseract) when vision is unavailable, so terminal output / error dialogs still get analyzed.
 
 ### 🔐 Security & privacy
 - Featherless API keys exist **only on the server** — the browser never sees them.

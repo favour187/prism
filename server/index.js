@@ -7,6 +7,7 @@ import config from './config.js';
 import { errorHandler, notFoundApi } from './middleware/errorHandler.js';
 import { apiLimiter } from './middleware/rateLimit.js';
 import chatRouter from './routes/chat.js';
+import writeRouter from './routes/write.js';
 import conversationsRouter from './routes/conversations.js';
 import uploadsRouter from './routes/uploads.js';
 import voiceRouter from './routes/voice.js';
@@ -56,6 +57,7 @@ app.use('/api', apiLimiter);
 
 // ---- API routes ----------------------------------------------------------------
 app.use('/api/chat', chatRouter);
+app.use('/api/write', writeRouter);
 app.use('/api/conversations', conversationsRouter);
 app.use('/api/uploads', uploadsRouter);
 app.use('/api/transcribe', voiceRouter);

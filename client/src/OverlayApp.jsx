@@ -16,31 +16,27 @@ const SIZE_PRESETS = [
   { key: 'L', w: 620, h: 840 },
 ];
 
-const WRITE_STYLES = [
-  { id: 'fix', label: 'Fix grammar', hint: 'corrects spelling & grammar, keeps voice' },
-  { id: 'improve', label: 'Improve', hint: 'same meaning, sharper writing' },
-  { id: 'concise', label: 'Concise', hint: 'say it in fewer words' },
-  { id: 'professional', label: 'Professional', hint: 'formal, work-appropriate tone' },
-  { id: 'friendly', label: 'Friendly', hint: 'warmer, more casual tone' },
-  { id: 'expand', label: 'Expand', hint: 'more detail & structure' },
-  { id: 'to_en', label: '→ English', hint: 'translate to English' },
-  { id: 'to_fr', label: '→ French', hint: 'traduire en français' },
+// Rendered instantly; refreshed from /api/write/styles (single source of truth).
+const FALLBACK_STYLES = [
+  { id: 'fix', label: 'Fix grammar' },
+  { id: 'improve', label: 'Improve' },
+  { id: 'concise', label: 'Concise' },
+  { id: 'professional', label: 'Professional' },
+  { id: 'friendly', label: 'Friendly' },
+  { id: 'expand', label: 'Expand' },
+  { id: 'to_en', label: '→ English' },
+  { id: 'to_fr', label: '→ French' },
 ];
 
-const WRITE_PROMPT = {
-  fix: "Fix the grammar and spelling of this text. Return ONLY the corrected text — no commentary, no quotes, preserve the author's voice.",
-  improve: 'Improve this writing: clearer, sharper, same meaning and length roughly. Return ONLY the improved text — no commentary.',
-  concise: 'Make this text significantly more concise without losing meaning. Return ONLY the rewritten text — no commentary.',
-  professional: 'Rewrite this text in a professional, work-appropriate tone. Return ONLY the rewritten text — no commentary.',
-  friendly: 'Rewrite this text in a warmer, friendlier, more casual tone. Return ONLY the rewritten text — no commentary.',
-  expand: 'Expand this text with more detail and structure. Return ONLY the rewritten text — no commentary.',
-  to_en: 'Translate this text to natural English. Return ONLY the translation — no commentary.',
-  to_fr: 'Translate this text to natural French. Return ONLY the translation — no commentary.',
-};
+const WATCH_NARRATION_PROMPT =
+  'Watch narration: in ONE short sentence, describe what visibly changed on the screen. ' +
+  'Be concrete — name the app, dialog, or content that changed. No preamble.';
 
 /**
- * Compact toggle assistant — the Arc-style experience.
- * Global hotkey → panel → capture/watch → ask → answer (spoken) → write back.
+ * Universal command bar — the Arc-style experience.
+ * One input: '/' opens the command palette (watch, captures, voice…);
+ * typed text surfaces inline write-style chips that transform it in place;
+ * Enter asks; ⌘⇧R/G/W work system-wide from any app.
  */
 export default function OverlayApp() {
   const [messages, setMessages] = useState([]);
@@ -56,17 +52,22 @@ export default function OverlayApp() {
   const [mic, setMic] = useState('idle');
   const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('prism.autospeak') !== '0');
   const [watch, setWatch] = useState(null); // {count, sensitivity}
-  const [writeOpen, setWriteOpen] = useState(false);
-  const [writeResult, setWriteResult] = useState(null); // last write-mode output
+  const [narrate, setNarrate] = useState(() => localStorage.getItem('prism.watchNarrate') !== '0');
+  const [styles, setStyles] = useState(FALLBACK_STYLES);
+  const [styleBusy, setStyleBusy] = useState(null); // style id currently transforming
+  const [writeState, setWriteState] = useState(null); // { original } after in-place transform
   const [sizeMenu, setSizeMenu] = useState(false);
   const [dims, setDims] = useState({ w: window.innerWidth, h: window.innerHeight });
+  const [palIndex, setPalIndex] = useState(0);
 
   const abortRef = useRef(null);
   const noticeTimer = useRef(null);
   const recorderRef = useRef(null);
   const streamTextRef = useRef('');
   const watcherRef = useRef(null);
-  const writeTaskRef = useRef(false);
+  const streamRef = useRef(null);
+  const narrateRef = useRef(narrate);
+  narrateRef.current = narrate;
 
   const [conversationId, setConversationId] = useState(
     () => localStorage.getItem('prism.overlayConversationId') ?? null,
@@ -79,7 +80,12 @@ export default function OverlayApp() {
   }, []);
 
   useEffect(() => {
+    streamRef.current = stream;
+  }, [stream]);
+
+  useEffect(() => {
     api.getConfig().then(setCfg).catch(() => {});
+    api.listWriteStyles().then((d) => d.styles?.length && setStyles(d.styles)).catch(() => {});
     if (conversationId) {
       api.getConversation(conversationId)
         .then((d) => setMessages(d.messages))
@@ -91,6 +97,14 @@ export default function OverlayApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem('prism.watchNarrate', narrate ? '1' : '0');
+  }, [narrate]);
+
+  useEffect(() => {
+    localStorage.setItem('prism.autospeak', autoSpeak ? '1' : '0');
+  }, [autoSpeak]);
+
   // ------------------------------- window size --------------------------------
   useEffect(() => {
     const onResize = () => setDims({ w: window.innerWidth, h: window.innerHeight });
@@ -98,7 +112,6 @@ export default function OverlayApp() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // Restore the remembered size in the desktop shell.
   useEffect(() => {
     if (!desktop?.setSize) return;
     const stored = (localStorage.getItem('prism.overlaySize') ?? '').split('x').map(Number);
@@ -148,13 +161,82 @@ export default function OverlayApp() {
     setShots((prev) => [...prev.slice(-3), { id: `shot-${Date.now()}-${shotSeq}`, dataUrl, name }]);
   }, []);
 
-  // ------------------------------- watch mode ---------------------------------
+  // ------------------------------ watch: stop ---------------------------------
   const stopWatch = useCallback(() => {
     watcherRef.current?.stop();
     watcherRef.current = null;
     setWatch(null);
   }, []);
 
+  // -------------------------------- sending ---------------------------------
+
+  /**
+   * One pipeline for every assistant turn.
+   * options.auto: background turn (narration) — keeps the user's draft & watch running.
+   * options.screenshots / userPreview: override payload images / shown user message.
+   */
+  const sendContent = useCallback((content, { auto = false, screenshots = null, userPreview = null } = {}) => {
+    if (streamRef.current) return; // one turn at a time; narration yields to the user
+    stopSpeaking();
+    if (!auto) stopWatch();
+    streamTextRef.current = '';
+    const payloadShots = screenshots ?? shots.map((s) => s.dataUrl);
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `local-${Date.now()}${auto ? `-a${shotSeq}` : ''}`,
+        role: 'user',
+        content: [
+          userPreview ?? content,
+          ...payloadShots.map((d, i) => `![capture ${i + 1}](${d})`),
+        ].filter(Boolean).join('\n\n') || 'Screenshot',
+        createdAt: Date.now(),
+        meta: auto ? { watch: true } : {},
+        attachments: [],
+      },
+    ]);
+    setStream({ text: '', meta: null, error: null });
+    if (!auto) {
+      setText('');
+      setShots([]);
+      setWriteState(null);
+    }
+
+    abortRef.current = streamChat(
+      { conversationId, content, screenshots: payloadShots },
+      {
+        onMeta: (meta) => {
+          if (meta.conversationId && meta.conversationId !== conversationId) {
+            setConversationId(meta.conversationId);
+            localStorage.setItem('prism.overlayConversationId', meta.conversationId);
+          }
+          setStream((s) => (s ? { ...s, meta: { ...(s.meta ?? {}), ...meta } } : s));
+        },
+        onDelta: (delta) => {
+          streamTextRef.current += delta;
+          setStream((s) => (s ? { ...s, text: s.text + delta } : s));
+        },
+        onNotice: (n) => flash(n, 5200),
+        onError: (err) => setStream((s) => (s ? { ...s, error: err } : { text: '', meta: null, error: err })),
+        onDone: async (done) => {
+          setStream(null);
+          const finalText = streamTextRef.current;
+          if (done?.conversationId) {
+            try {
+              const data = await api.getConversation(done.conversationId);
+              setMessages(data.messages);
+            } catch { /* keep optimistic view */ }
+          }
+          if (autoSpeak && finalText && ttsSupported()) {
+            speak(finalText).catch(() => {});
+          }
+        },
+      },
+    );
+  }, [shots, conversationId, flash, autoSpeak, stopWatch]);
+
+  // ------------------------------- watch mode ---------------------------------
   const toggleWatch = useCallback(async (sensitivity = watch?.sensitivity ?? 'medium') => {
     if (watcherRef.current) {
       const n = watch?.count ?? 0;
@@ -170,6 +252,13 @@ export default function OverlayApp() {
           addShot(dataUrl, `watch-${n}.jpg`);
           setWatch((prev) => (prev ? { ...prev, count: n } : prev));
           flash(`Movement detected (Δ${delta.toFixed(1)}${jumps >= 3 ? ', layout jump' : ''}) — screenshot ${n} captured.`, 2600);
+          if (narrateRef.current && !streamRef.current) {
+            sendContent(WATCH_NARRATION_PROMPT, {
+              auto: true,
+              screenshots: [dataUrl],
+              userPreview: `🎥 Screen changed — shot #${n}`,
+            });
+          }
         },
         onTick: (avg) => {
           if (avg < 0) {
@@ -184,13 +273,12 @@ export default function OverlayApp() {
     } catch (err) {
       flash(err?.name === 'NotAllowedError' ? 'Watch needs capture permission.' : `Watch failed: ${err.message}`);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stopWatch, addShot, flash, watch?.sensitivity, watch?.count]);
+  }, [stopWatch, addShot, flash, sendContent, watch?.sensitivity, watch?.count]);
 
   useEffect(() => () => watcherRef.current?.stop(), []);
 
   // ------------------------------- capture ---------------------------------
-  const captureScreen = async () => {
+  const captureScreen = useCallback(async () => {
     setBusy('screen');
     try {
       const dataUrl = android
@@ -204,9 +292,9 @@ export default function OverlayApp() {
     } finally {
       setBusy(null);
     }
-  };
+  }, [addShot, flash]);
 
-  const showWindowPicker = async () => {
+  const showWindowPicker = useCallback(async () => {
     setBusy('window');
     try {
       if (desktop) {
@@ -219,7 +307,7 @@ export default function OverlayApp() {
     } finally {
       setBusy(null);
     }
-  };
+  }, [addShot, flash]);
 
   const pickWindow = async (id) => {
     setWindows(null);
@@ -233,7 +321,7 @@ export default function OverlayApp() {
     }
   };
 
-  const captureRegion = async () => {
+  const captureRegion = useCallback(async () => {
     setBusy('region');
     try {
       if (android) {
@@ -250,14 +338,10 @@ export default function OverlayApp() {
     } finally {
       setBusy(null);
     }
-  };
+  }, [addShot, flash]);
 
   // --------------------------------- voice ----------------------------------
-  useEffect(() => {
-    localStorage.setItem('prism.autospeak', autoSpeak ? '1' : '0');
-  }, [autoSpeak]);
-
-  const toggleMic = async () => {
+  const toggleMic = useCallback(async () => {
     if (mic === 'recording') {
       setMic('transcribing');
       const { blob, mime } = (await recorderRef.current?.stop()) ?? {};
@@ -291,114 +375,114 @@ export default function OverlayApp() {
           : `Mic unavailable: ${err.message}`,
       );
     }
-  };
+  }, [mic, flash]);
 
-  // -------------------------------- sending ---------------------------------
-  const canSend = !stream && (text.trim() || shots.length > 0);
-
-  const sendContent = useCallback((content, { isWrite = false } = {}) => {
-    stopSpeaking();
-    stopWatch();
-    streamTextRef.current = '';
-    writeTaskRef.current = isWrite;
-    const payloadShots = shots.map((s) => s.dataUrl);
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `local-${Date.now()}`,
-        role: 'user',
-        content: [isWrite ? `**✍️ Write request**` : content, isWrite ? `> ${text.slice(0, 500)}` : '',
-          ...payloadShots.map((d, i) => `![capture ${i + 1}](${d})`)].filter(Boolean).join('\n\n') || 'Screenshot',
-        createdAt: Date.now(),
-        meta: {},
-        attachments: [],
-      },
-    ]);
-    setStream({ text: '', meta: null, error: null });
-    setText('');
-    setShots([]);
-
-    abortRef.current = streamChat(
-      { conversationId, content, screenshots: payloadShots },
-      {
-        onMeta: (meta) => {
-          if (meta.conversationId && meta.conversationId !== conversationId) {
-            setConversationId(meta.conversationId);
-            localStorage.setItem('prism.overlayConversationId', meta.conversationId);
-          }
-          setStream((s) => (s ? { ...s, meta: { ...(s.meta ?? {}), ...meta } } : s));
-        },
-        onDelta: (delta) => {
-          streamTextRef.current += delta;
-          setStream((s) => (s ? { ...s, text: s.text + delta } : s));
-        },
-        onNotice: (n) => flash(n, 5200),
-        onError: (err) => setStream((s) => (s ? { ...s, error: err } : { text: '', meta: null, error: err })),
-        onDone: async (done) => {
-          setStream(null);
-          const finalText = streamTextRef.current;
-          if (writeTaskRef.current && finalText) {
-            setWriteResult(finalText.trim().replace(/^["']|["']$/g, ''));
-            writeTaskRef.current = false;
-          }
-          if (done?.conversationId) {
-            try {
-              const data = await api.getConversation(done.conversationId);
-              setMessages(data.messages);
-            } catch { /* keep optimistic view */ }
-          }
-          if (autoSpeak && finalText && ttsSupported()) {
-            speak(finalText).catch(() => {});
-          }
-        },
-      },
-    );
-  }, [shots, conversationId, flash, autoSpeak, stopWatch, text]);
-
-  const send = useCallback(() => {
-    if (!canSend) return;
-    sendContent(text.trim());
-    setWriteResult(null);
-  }, [canSend, text, sendContent]);
-
-  const runWrite = useCallback((style) => {
-    const source = text.trim();
-    if (!source) {
-      flash('Type or paste some text first, then pick a style.');
-      return;
-    }
-    setWriteOpen(false);
-    setWriteResult(null);
-    sendContent(`${WRITE_PROMPT[style.id]}\n\n---\n${source}`, { isWrite: true });
-  }, [text, sendContent, flash]);
-
-  const insertResult = async () => {
-    if (!writeResult) return;
-    if (desktop?.writeText) {
-      const res = await desktop.writeText(writeResult).catch(() => ({ copied: false, pasted: false }));
-      flash(res.pasted ? 'Inserted into your app ✓' : 'Copied to clipboard — panel hid; paste with Ctrl/⌘+V.');
-    } else {
-      await navigator.clipboard.writeText(writeResult).catch(() => {});
-      flash('Copied — paste anywhere with Ctrl/⌘+V.');
-    }
-    setWriteResult(null);
-  };
-
-  const stop = () => {
-    abortRef.current?.abort();
-    setStream((s) => (s && s.text ? { ...s, error: { code: 'STOPPED', message: 'Stopped.' } } : null));
-  };
-
-  const newThread = () => {
+  const newThread = useCallback(() => {
     abortRef.current?.abort();
     stopWatch();
     setStream(null);
     setMessages([]);
     setShots([]);
-    setWriteResult(null);
+    setWriteState(null);
     setConversationId(null);
     localStorage.removeItem('prism.overlayConversationId');
+  }, [stopWatch]);
+
+  // ------------------------ global hotkeys (desktop shell) --------------------
+  const quickAsk = useCallback((selectionText) => {
+    const t = String(selectionText ?? '').trim();
+    if (!t) return;
+    sendContent(`Answer or explain this — be concise and useful:\n\n${t.slice(0, 6000)}`);
+  }, [sendContent]);
+
+  const toggleWatchRef = useRef(toggleWatch);
+  toggleWatchRef.current = toggleWatch;
+  const quickAskRef = useRef(quickAsk);
+  quickAskRef.current = quickAsk;
+
+  useEffect(() => {
+    if (!desktop) return undefined;
+    const un1 = desktop.onToggleWatch?.(() => toggleWatchRef.current());
+    const un2 = desktop.onQuickAsk?.((t) => quickAskRef.current(t));
+    return () => { un1?.(); un2?.(); };
+  }, []);
+
+  // ---------------------------- command palette ------------------------------
+  const paletteOpen = text.startsWith('/');
+  const commands = useMemo(() => {
+    const list = [
+      ...(!android ? [{
+        id: 'watch', icon: '◉', label: watch ? 'Stop watching' : 'Watch screen',
+        hint: 'screenshot only when something moves', run: () => toggleWatch(),
+      }] : []),
+      ...(!android ? [{
+        id: 'narrate', icon: '✨', label: `Narration ${narrate ? 'off' : 'on'}`,
+        hint: 'AI describes each change as it happens', run: () => setNarrate((v) => !v),
+      }] : []),
+      { id: 'screen', icon: '🖥', label: 'Screenshot', hint: 'capture the full screen', run: captureScreen },
+      ...(!android ? [{ id: 'window', icon: '🪟', label: 'Window', hint: 'capture one app window', run: showWindowPicker }] : []),
+      { id: 'region', icon: '✂️', label: 'Region', hint: 'drag-select a part of the screen', run: captureRegion },
+      ...(voiceSupported() ? [{ id: 'voice', icon: '🎤', label: 'Voice', hint: 'dictate into the bar', run: toggleMic }] : []),
+      ...(ttsSupported() ? [{
+        id: 'speak', icon: autoSpeak ? '🔇' : '🔊', label: `Spoken answers ${autoSpeak ? 'off' : 'on'}`,
+        hint: 'read replies aloud', run: () => setAutoSpeak((v) => !v),
+      }] : []),
+      ...(messages.length ? [{ id: 'new', icon: '＋', label: 'New thread', hint: 'clear and start over', run: newThread }] : []),
+    ];
+    const q = text.slice(1).trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((c) => c.id.includes(q) || c.label.toLowerCase().includes(q));
+  }, [text, watch, narrate, autoSpeak, messages.length, toggleWatch, captureScreen, showWindowPicker, captureRegion, toggleMic, newThread]);
+
+  useEffect(() => {
+    setPalIndex(0);
+  }, [text]);
+
+  // ------------------------------ inline write -------------------------------
+  const writeChipsOpen = Boolean(text.trim()) && !paletteOpen && !stream;
+  const transformed = writeState && text !== writeState.original;
+
+  const runInlineWrite = useCallback(async (style) => {
+    const source = text.trim();
+    if (!source || styleBusy) return;
+    setStyleBusy(style.id);
+    try {
+      const d = await api.write(source, style.id);
+      setWriteState((prev) => (prev ? prev : { original: text }));
+      setText(d.result);
+      setSizeMenu(false);
+    } catch (err) {
+      flash(err.message ?? 'Rewrite failed.');
+    } finally {
+      setStyleBusy(null);
+    }
+  }, [text, styleBusy, flash]);
+
+  const insertTransformed = useCallback(async () => {
+    const payload = text.trim();
+    if (!payload) return;
+    if (desktop?.writeText) {
+      const res = await desktop.writeText(payload).catch(() => ({ copied: false, pasted: false }));
+      flash(res.pasted ? 'Inserted into your app ✓' : 'Copied to clipboard — paste with Ctrl/⌘+V.');
+    } else {
+      await navigator.clipboard.writeText(payload).catch(() => {});
+      flash('Copied — paste anywhere with Ctrl/⌘+V.');
+    }
+    setText('');
+    setWriteState(null);
+  }, [text, flash]);
+
+  // ---------------------------------- send -----------------------------------
+  const canSend = !stream && (text.trim() || shots.length > 0);
+
+  const send = useCallback(() => {
+    if (!canSend || paletteOpen) return;
+    sendContent(text.trim());
+  }, [canSend, paletteOpen, text, sendContent]);
+
+  const stop = () => {
+    abortRef.current?.abort();
+    setStream((s) => (s && s.text ? { ...s, error: { code: 'STOPPED', message: 'Stopped.' } } : null));
   };
 
   const togglePin = async () => {
@@ -406,12 +490,36 @@ export default function OverlayApp() {
     setPinned(next);
   };
 
+  const onInputKeyDown = (e) => {
+    if (paletteOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!commands.length) return;
+        setPalIndex((i) => (i + (e.key === 'ArrowDown' ? 1 : -1) + commands.length) % commands.length);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const cmd = commands[Math.min(palIndex, commands.length - 1)];
+        setText('');
+        cmd?.run?.();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setText('');
+      }
+      return;
+    }
+    if (e.key === 'Enter' && !stream) {
+      send();
+    } else if (e.key === 'Escape' && transformed) {
+      setText(writeState.original);
+      setWriteState(null);
+    }
+  };
+
   const providerReady = cfg?.provider?.ready ?? true;
   const kbd = useMemo(() => (navigator.platform?.includes('Mac') ? '⌘⇧A' : 'Ctrl+Shift+A'), []);
 
   return (
     <div className="overlay-app">
-      {/* draggable title strip (frameless Electron window) */}
       <header className="ov-drag">
         <span className="ov-gem" aria-hidden="true" />
         <span className="ov-brand">Prism</span>
@@ -453,7 +561,12 @@ export default function OverlayApp() {
       {watch && (
         <div className="ov-watchbar">
           <span className="ov-watching-dot" aria-hidden="true" />
-          <span className="ov-watchtext">Watching — <strong>{watch.count}</strong> saved when screen moves</span>
+          <span className="ov-watchtext">Watching — <strong>{watch.count}</strong> kept</span>
+          <button
+            className={`ov-watch-narrate ${narrate ? 'on' : ''}`}
+            title="AI narrates each detected change in the thread"
+            onClick={() => setNarrate((v) => !v)}
+          >✨ narrate</button>
           <select
             className="ov-watch-sens"
             value={watch.sensitivity}
@@ -503,19 +616,9 @@ export default function OverlayApp() {
           messages={messages}
           stream={stream}
           onCodeAction={null}
-          emptyHint={`Press ${kbd} anywhere to toggle me. Capture your screen — live or motion-triggered — and ask about it.`}
+          emptyHint={`One bar for everything: type to ask · / for commands · typed text gets write styles. ${kbd} toggles me anywhere.`}
         />
       </div>
-
-      {writeResult && (
-        <div className="ov-actionbar">
-          <span className="ov-actionbar-label">✍ Result</span>
-          <button className="btn primary small" onClick={insertResult}>⤓ Insert into app</button>
-          <button className="btn ghost small" onClick={async () => { await navigator.clipboard.writeText(writeResult).catch(() => {}); flash('Copied.'); }}>Copy</button>
-          {ttsSupported() && <button className="btn ghost small" onClick={() => speak(writeResult).catch(() => {})}>Speak</button>}
-          <button className="ov-btn" onClick={() => setWriteResult(null)} title="Dismiss">✕</button>
-        </div>
-      )}
 
       {shots.length > 0 && (
         <div className="ov-shots">
@@ -528,48 +631,27 @@ export default function OverlayApp() {
         </div>
       )}
 
-      <footer className="ov-composer" onClick={() => (writeOpen && setWriteOpen(false), sizeMenu && setSizeMenu(false))}>
-        <div className="ov-tools">
-          {!android && (
-            <button
-              className={`ov-tool ${watch ? 'active rec' : ''}`}
-              onClick={(e) => { e.stopPropagation(); toggleWatch(); }}
-              title="Watch mode: sample the screen and keep a screenshot every time something visibly moves. Off = nothing is sampled."
-            >
-              ◉<span>{watch ? 'Watching' : 'Watch'}</span>
-            </button>
-          )}
-          <button
-            className={`ov-tool ${writeOpen ? 'active' : ''}`}
-            onClick={(e) => { e.stopPropagation(); setSizeMenu(false); setWriteOpen((v) => !v); }}
-            title="Write mode: rewrite your text in a chosen style, then insert it into the app you were using."
-          >
-            ✍<span>Write</span>
-          </button>
-          <div className="ov-tools-right no-drag" onClick={(e) => e.stopPropagation()}>
-            <button
-              className="ov-size-label"
-              title="Panel size — click for presets"
-              onClick={() => { setWriteOpen(false); setSizeMenu((v) => !v); }}
-            >
-              {dims.w}×{dims.h}
-            </button>
-          </div>
-        </div>
-
-        {writeOpen && (
-          <div className="ov-pop" onClick={(e) => e.stopPropagation()}>
-            <div className="ov-pop-title">Rewrite as…</div>
-            <div className="ov-write-grid">
-              {WRITE_STYLES.map((s) => (
-                <button key={s.id} className="ov-write-style" title={s.hint} onClick={() => runWrite(s)}>
-                  {s.label}
-                </button>
-              ))}
-            </div>
+      <footer className="ov-composer" onClick={() => sizeMenu && setSizeMenu(false)}>
+        {/* command palette */}
+        {paletteOpen && (
+          <div className="ov-palette" role="listbox" aria-label="Commands">
+            {commands.map((c, i) => (
+              <button
+                key={c.id}
+                className={`ov-palette-item ${i === Math.min(palIndex, commands.length - 1) ? 'active' : ''}`}
+                onMouseEnter={() => setPalIndex(i)}
+                onClick={() => { setText(''); c.run(); }}
+              >
+                <span className="ov-palette-icon">{c.icon}</span>
+                <span className="ov-palette-label">{c.label}</span>
+                <span className="ov-palette-hint">{c.hint}</span>
+              </button>
+            ))}
+            {!commands.length && <div className="ov-palette-empty">No matching command.</div>}
           </div>
         )}
 
+        {/* size presets */}
         {sizeMenu && (
           <div className="ov-pop right" onClick={(e) => e.stopPropagation()}>
             <div className="ov-pop-title">Panel size</div>
@@ -593,6 +675,41 @@ export default function OverlayApp() {
           </div>
         )}
 
+        {/* inline write styles — the Arc moment inside the bar */}
+        {writeChipsOpen && (
+          <div className="ov-chips" onClick={(e) => e.stopPropagation()}>
+            {styles.map((s) => (
+              <button
+                key={s.id}
+                className={`ov-chip ${styleBusy === s.id ? 'busy' : ''}`}
+                title={s.hint ?? ''}
+                disabled={Boolean(styleBusy)}
+                onClick={() => runInlineWrite(s)}
+              >
+                {s.label}
+                {styleBusy === s.id && <span className="spinner" />}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* transformed in place — act on it */}
+        {transformed && !paletteOpen && (
+          <div className="ov-bar-actions" onClick={(e) => e.stopPropagation()}>
+            <button className="btn primary small" onClick={insertTransformed}>⤓ Insert into app</button>
+            <button
+              className="btn ghost small"
+              onClick={() => { setText(writeState.original); setWriteState(null); }}
+              title="Restore what you typed (Esc)"
+            >↺ Original</button>
+            <button
+              className="btn ghost small"
+              onClick={async () => { await navigator.clipboard.writeText(text).catch(() => {}); flash('Copied.'); }}
+            >Copy</button>
+          </div>
+        )}
+
+        {/* capture row */}
         <div className={`ov-capture-row ${android ? 'two' : ''}`}>
           <button className="ov-cap" disabled={Boolean(busy) || Boolean(stream)} onClick={captureScreen} title="Capture the whole screen">
             🖥<span>Screen</span>{busy === 'screen' && <span className="spinner" />}
@@ -606,6 +723,8 @@ export default function OverlayApp() {
             ✂️<span>Region</span>{busy === 'region' && <span className="spinner" />}
           </button>
         </div>
+
+        {/* the bar */}
         <div className="ov-input-row">
           {voiceSupported() && (
             <button
@@ -620,20 +739,40 @@ export default function OverlayApp() {
           {mic === 'recording' && <span className="ov-rec">listening… tap ⏺ to stop</span>}
           <input
             className="ov-input"
-            placeholder={shots.length ? 'Ask about the capture…' : 'Ask, or type text then ✍ Write…'}
+            placeholder={shots.length ? 'Ask about the capture… ( / for commands )' : 'Ask anything · / for commands · type text to rewrite it'}
             value={text}
             disabled={Boolean(stream)}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !stream && send()}
+            onKeyDown={onInputKeyDown}
             autoFocus
+            spellCheck="false"
           />
           {stream
             ? <button className="ov-send stop" onClick={stop} title="Stop">■</button>
-            : <button className="ov-send" onClick={send} disabled={!canSend} title="Send">➤</button>}
+            : <button className="ov-send" onClick={send} disabled={!canSend || paletteOpen} title="Send">➤</button>}
         </div>
-        <div className="ov-statusline">
-          <span>{cfg?.defaults?.chatModel ?? 'Prism'} · Featherless AI</span>
+
+        {/* slim status row */}
+        <div className="ov-slim no-drag" onClick={(e) => e.stopPropagation()}>
+          {!android && (
+            <button
+              className={`ov-slim-watch ${watch ? 'on' : ''}`}
+              title="Watch: sample the screen, keep a screenshot when it moves. Only while toggled on."
+              onClick={() => toggleWatch()}
+            >
+              ◉ {watch ? `watching · ${watch.count}` : 'watch'}
+            </button>
+          )}
+          <button
+            className="ov-size-label"
+            title="Panel size — click for presets"
+            onClick={() => setSizeMenu((v) => !v)}
+          >
+            {dims.w}×{dims.h}
+          </button>
+          <span className="ov-slim-model">{cfg?.defaults?.chatModel ?? 'Prism'} · Featherless</span>
         </div>
+
         {desktop?.setSize && (
           <div className="ov-resize no-drag" onMouseDown={startDragResize} title="Drag to resize" aria-hidden="true" />
         )}

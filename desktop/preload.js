@@ -33,4 +33,26 @@ contextBridge.exposeInMainWorld('prismDesktop', {
 
   hide: () => ipcRenderer.send('prism:hide'),
   openFullApp: () => ipcRenderer.send('prism:open-full'),
+
+  /** ⌘⇧G "ask about selection" — payload arrives here; cb(text). Returns an unsubscribe fn. */
+  onQuickAsk: (cb) => {
+    const listener = (_e, text) => cb(text);
+    ipcRenderer.on('prism:quick-ask', listener);
+    return () => ipcRenderer.removeListener('prism:quick-ask', listener);
+  },
+
+  /** ⌘⇧W global watch toggle; cb(). Returns an unsubscribe fn. */
+  onToggleWatch: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on('prism:toggle-watch', listener);
+    return () => ipcRenderer.removeListener('prism:toggle-watch', listener);
+  },
+
+  // ---- inline Write bar (⌘⇧R window) ----
+  /** Text that was selected in the source app when the bar opened. */
+  writeGetSelection: () => ipcRenderer.invoke('prism:write-selection'),
+  /** Paste the rewritten text back into the source app; returns { copied, pasted }. */
+  writePasteBack: (text) => ipcRenderer.invoke('prism:write-back', text),
+  /** Close the bar and restore the previous clipboard. */
+  writeCancel: () => ipcRenderer.send('prism:write-cancel'),
 });

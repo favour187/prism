@@ -183,6 +183,34 @@ async function main() {
     const cfg2 = await (await fetch(`${BASE}/api/config`)).json();
     assert(cfg2.voice?.stt === true, 'config advertises STT capability');
 
+    // ---- writing tools (Arc-style, single source of truth) ----
+    console.log('• writing tools');
+    const stylesRes = await fetch(`${BASE}/api/write/styles`);
+    const stylesJson = await stylesRes.json();
+    assert(
+      stylesRes.status === 200 && stylesJson.styles.length >= 8 && stylesJson.styles.every((s) => s.id && s.label),
+      'GET /api/write/styles lists the rewrite styles',
+    );
+    const wr = await fetch(`${BASE}/api/write`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'me and him goes to office everydays', style: 'fix' }),
+    });
+    const wrJson = await wr.json();
+    assert(wr.status === 200 && typeof wrJson.result === 'string' && wrJson.result.length > 0, 'POST /api/write returns a rewrite');
+    const wrBad = await fetch(`${BASE}/api/write`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'hello', style: 'nope' }),
+    });
+    assert(wrBad.status === 400, 'unknown style is a structured 400');
+    const wrEmpty = await fetch(`${BASE}/api/write`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: '  ', style: 'fix' }),
+    });
+    assert(wrEmpty.status === 400, 'empty text is a structured 400');
+
     // ---- privacy export ----
     console.log('• privacy');
     const exported = await (await fetch(`${BASE}/api/privacy/export`)).json();

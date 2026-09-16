@@ -18,6 +18,11 @@ async function jsonFetch(path, options = {}) {
 export const api = {
   getConfig: () => jsonFetch('/api/config'),
 
+  /** Arc-style writing tools: [{id,label,hint}] and one-shot rewrites. */
+  listWriteStyles: () => jsonFetch('/api/write/styles'),
+  write: (text, style) =>
+    jsonFetch('/api/write', { method: 'POST', body: JSON.stringify({ text, style }) }),
+
   listConversations: (query = '') =>
     jsonFetch(`/api/conversations${query ? `?query=${encodeURIComponent(query)}` : ''}`),
 

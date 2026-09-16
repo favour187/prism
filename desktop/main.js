@@ -239,6 +239,130 @@ ipcMain.handle('prism:write', (_e, text) => {
   return { copied: true, pasted: false };
 });
 
+// -------------------- inline write bar (Arc-style, any app) -----------------
+// ⌘/Ctrl+Shift+R grabs the selection in WHATEVER app is focused, opens the
+// floating write bar, style chips rewrite it, and Enter pastes the rewrite
+// straight back into the source app. No panel context-switch.
+
+let writeWin = null;
+let writeSelection = { text: '', previous: '' };
+let writeDidPaste = false;
+
+const MOD = process.platform === 'darwin' ? 'command' : 'control';
+
+/** Simulate copy, read the clipboard, preserve what was there. */
+async function grabSelection() {
+  const previous = clipboard.readText();
+  let text = previous; // graceful path: robot missing → treat clipboard as selection
+  if (robot) {
+    try {
+      robot.keyTap('c', MOD);
+      await new Promise((r) => setTimeout(r, 240));
+      const after = clipboard.readText();
+      text = after === previous ? '' : after;
+    } catch {
+      text = previous; // no Accessibility permission — clipboard stays intact
+    }
+  }
+  return { text: String(text ?? ''), previous: String(previous ?? '') };
+}
+
+function openWriteBar() {
+  if (writeWin && !writeWin.isDestroyed()) {
+    writeWin.close();
+    return; // second press toggles it away
+  }
+  grabSelection().then((sel) => {
+    writeSelection = sel;
+    writeDidPaste = false;
+    const point = screen.getCursorScreenPoint();
+    const area = screen.getDisplayNearestPoint(point).workArea;
+    const W = 500;
+    const H = 330;
+    writeWin = new BrowserWindow({
+      width: W,
+      height: H,
+      x: Math.min(Math.max(point.x - W / 2, area.x + 8), area.x + area.width - W - 8),
+      y: Math.min(Math.max(point.y - 24, area.y + 8), area.y + area.height - H - 8),
+      frame: false,
+      show: false,
+      resizable: false,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      autoHideMenuBar: true,
+      backgroundColor: '#0e1016',
+      title: 'Prism Write',
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+    writeWin.setAlwaysOnTop(true, 'floating');
+    writeWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    writeWin.loadURL(`${PRISM_URL}/?writebar=1`);
+    writeWin.once('ready-to-show', () => writeWin?.show());
+    writeWin.on('closed', () => {
+      writeWin = null;
+      if (!writeDidPaste && writeSelection.previous) {
+        clipboard.writeText(writeSelection.previous); // never clobber the user's clipboard on cancel
+      }
+    });
+    // Arc popovers go away when you click elsewhere.
+    writeWin.on('blur', () => {
+      setTimeout(() => {
+        if (writeWin && !writeWin.isDestroyed() && !writeWin.isFocused()) writeWin.close();
+      }, 250);
+    });
+  });
+}
+
+ipcMain.handle('prism:write-selection', () => ({
+  text: writeSelection.text,
+  clipboardBacked: !robot || Boolean(writeSelection.text && writeSelection.text === writeSelection.previous),
+}));
+
+ipcMain.handle('prism:write-back', (_e, text) => {
+  const payload = String(text ?? '').slice(0, 1_000_000);
+  writeDidPaste = true;
+  clipboard.writeText(payload);
+  const w = writeWin;
+  if (w && !w.isDestroyed()) w.hide(); // source app regains focus
+  let pasted = false;
+  if (robot) {
+    pasted = true;
+    setTimeout(() => {
+      try {
+        robot.keyTap('v', MOD);
+      } catch { /* accessibility missing — clipboard is still set */ }
+      if (w && !w.isDestroyed()) w.close();
+    }, 260);
+  } else if (w && !w.isDestroyed()) {
+    w.close();
+  }
+  return { copied: true, pasted };
+});
+
+ipcMain.on('prism:write-cancel', () => {
+  writeDidPaste = false;
+  if (writeWin && !writeWin.isDestroyed()) writeWin.close();
+});
+
+/** Show the overlay and hand it a payload over IPC (once it has a listener). */
+function presentOverlay(channel, payload) {
+  if (!win || win.isDestroyed()) createWindow();
+  const deliver = () => {
+    win.show();
+    win.focus();
+    if (channel) win.webContents.send(channel, payload);
+  };
+  if (win.webContents.isLoading()) {
+    win.webContents.once('did-finish-load', deliver);
+  } else {
+    deliver();
+  }
+}
+
 // ------------------------------- lifecycle ---------------------------------
 
 const gotLock = app.requestSingleInstanceLock();
@@ -270,6 +394,26 @@ if (!gotLock) {
     const ok = globalShortcut.register(SHORTCUT, toggleWindow);
     if (!ok) console.warn('[prism-desktop] could not register', SHORTCUT);
     globalShortcut.register('CommandOrControl+Shift+Q', () => app.quit());
+
+    // Inline, system-wide Arc-style commands:
+    for (const [accel, fn, label] of [
+      ['CommandOrControl+Shift+R', openWriteBar, 'write-selection'],
+      [
+        'CommandOrControl+Shift+G',
+        async () => {
+          const sel = await grabSelection();
+          if (sel.previous) clipboard.writeText(sel.previous); // grab is inspect-only here
+          if (sel.text) presentOverlay('prism:quick-ask', sel.text);
+          else toggleWindow();
+        },
+        'quick-ask',
+      ],
+      ['CommandOrControl+Shift+W', () => presentOverlay('prism:toggle-watch'), 'watch toggle'],
+    ]) {
+      if (!globalShortcut.register(accel, fn)) {
+        console.warn('[prism-desktop] could not register', accel, `(${label})`);
+      }
+    }
   });
 
   // Assistant-style: closing windows keeps the daemon alive (reopen via hotkey).
