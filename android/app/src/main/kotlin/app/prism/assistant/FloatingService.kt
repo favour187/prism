@@ -227,7 +227,7 @@ class FloatingService : Service() {
 
     // -------------------------------- panel ---------------------------------
 
-    @SuppressLint({ "SetJavaScriptEnabled", "ClickableViewAccessibility" })
+    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     private fun ensurePanel() {
         if (panel != null) return
         val container = FrameLayout(this)
