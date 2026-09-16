@@ -24,19 +24,6 @@ let win = null;
 let regionWin = null;
 let regionResolve = null;
 
-const distDir = path.join(__dirname, '..', 'client', 'dist');
-const localDistIndex = path.join(distDir, 'index.html');
-const fs = require('node:fs');
-
-async function loadOverlay(browserWindow) {
-  // Prefer the live web app; fall back to a locally built dist (offline dev with the API on :4000).
-  if (process.env.PRISM_URL || !fs.existsSync(localDistIndex)) {
-    await browserWindow.loadURL(`${PRISM_URL}/?overlay=1`);
-  } else {
-    await browserWindow.loadFile(localDistIndex, { search: 'overlay=1' });
-  }
-}
-
 function currentDisplay() {
   if (win && !win.isDestroyed()) return screen.getDisplayMatching(win.getBounds());
   return screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
