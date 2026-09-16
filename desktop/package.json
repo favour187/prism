@@ -4,7 +4,10 @@
   "description": "Prism Desktop — Arc-style floating AI screen assistant (global hotkey, captures, voice).",
   "private": true,
   "main": "main.js",
-  "author": "Prism",
+  "author": {
+    "name": "favour187",
+    "email": "favour187@users.noreply.github.com"
+  },
   "license": "MIT",
   "homepage": "https://github.com/favour187/prism",
   "scripts": {
