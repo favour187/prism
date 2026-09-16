@@ -1,9 +1,9 @@
 package app.prism.assistant
 
-import android.app.Activity
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
+import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 
 /**
@@ -12,7 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
  * The dialog itself is the privacy gate — capture never starts without the
  * user's explicit tap, and only a single frame is taken.
  */
-class CapturePermissionActivity : Activity() {
+class CapturePermissionActivity : ComponentActivity() {
 
     private val captureLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
