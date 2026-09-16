@@ -12,8 +12,18 @@
  *   npm install && npm start                 → uses https://prism-yks3.onrender.com
  *   PRISM_URL=http://localhost:5173 npm run dev
  */
-const { app, BrowserWindow, globalShortcut, ipcMain, screen, desktopCapturer, shell, session } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, screen, desktopCapturer, shell, session, clipboard } = require('electron');
 const path = require('node:path');
+
+// Optional: true keystroke paste for "Insert into app". Gracefully degrades
+// to clipboard-only if the prebuilt binary is unavailable for this platform.
+let robot = null;
+try {
+  // eslint-disable-next-line global-require
+  robot = require('@jitsi/robotjs');
+} catch {
+  robot = null;
+}
 
 const PRISM_URL = (process.env.PRISM_URL ?? 'https://prism-yks3.onrender.com').replace(/\/$/, '');
 const SHORTCUT = process.env.PRISM_SHORTCUT ?? 'CommandOrControl+Shift+A';
@@ -197,6 +207,38 @@ ipcMain.handle('prism:set-pin', (_e, pin) => {
 ipcMain.on('prism:hide', () => win?.hide());
 ipcMain.on('prism:open-full', () => shell.openExternal(PRISM_URL));
 
+const SIZE_LIMITS = { minW: 340, maxW: 1600, minH: 420, maxH: 1600 };
+
+ipcMain.handle('prism:set-size', (_e, w, h) => {
+  if (!win || win.isDestroyed()) return null;
+  const width = Math.max(SIZE_LIMITS.minW, Math.min(SIZE_LIMITS.maxW, Math.round(Number(w) || win.getSize()[0])));
+  const height = Math.max(SIZE_LIMITS.minH, Math.min(SIZE_LIMITS.maxH, Math.round(Number(h) || win.getSize()[1])));
+  win.setSize(width, height);
+  return { w: width, h: height };
+});
+
+/**
+ * "Insert into app": puts the text on the clipboard, hides the panel so the
+ * previously focused app regains focus, and — when the optional robot module
+ * is available (and macOS Accessibility permission was granted) — simulates
+ * a genuine paste keystroke into that app.
+ */
+ipcMain.handle('prism:write', (_e, text) => {
+  const payload = String(text ?? '').slice(0, 1_000_000);
+  clipboard.writeText(payload);
+  if (robot && win && !win.isDestroyed()) {
+    win.hide();
+    setTimeout(() => {
+      try {
+        robot.keyTap('v', process.platform === 'darwin' ? 'command' : 'control');
+      } catch { /* accessibility permission missing — clipboard is still set */ }
+      setTimeout(() => win && !win.isDestroyed() && win.show(), 350);
+    }, 320);
+    return { copied: true, pasted: true };
+  }
+  return { copied: true, pasted: false };
+});
+
 // ------------------------------- lifecycle ---------------------------------
 
 const gotLock = app.requestSingleInstanceLock();
@@ -212,6 +254,17 @@ if (!gotLock) {
     session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => {
       cb(permission === 'media' || permission === 'audioCapture' || permission === 'speaker-selection');
     });
+
+    // Watch mode needs a getDisplayMedia stream. Electron 31+ can show the
+    // native system picker; otherwise we grant the primary screen source.
+    if (session.defaultSession.setDisplayMediaRequestHandler) {
+      session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+        desktopCapturer
+          .getSources({ types: ['screen'], thumbnailSize: { width: 64, height: 64 } })
+          .then((sources) => callback({ video: sources[0], audio: false }))
+          .catch(() => callback({}));
+      });
+    }
 
     createWindow();
     const ok = globalShortcut.register(SHORTCUT, toggleWindow);

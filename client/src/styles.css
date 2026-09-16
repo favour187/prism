@@ -582,3 +582,126 @@ html[data-theme='light'] .code-block { background: #0d1117; color: #e6edf3; }
   align-self: center; font-size: 11px; color: var(--danger); white-space: nowrap;
   animation: blink 1.4s steps(2) infinite;
 }
+
+/* ============ mature polish refinement ============ */
+html[data-theme='dark'] { --border: #232939; --shadow: 0 14px 44px rgba(0,0,0,0.38); }
+html[data-theme='light'] { --border: #e3e6f0; --shadow: 0 14px 44px rgba(30,34,60,0.12); }
+body { letter-spacing: 0.1px; }
+.msg-user .msg-content { border-radius: 16px; padding: 12px 15px; }
+.icon-btn { border-radius: 10px; transition: background .15s ease, color .15s ease; }
+.btn { transition: filter .15s ease, background .15s ease, transform .12s ease; }
+.btn:not(:disabled):active { transform: translateY(1px); }
+.convo-item { padding: 10px 11px; margin: 3px 0; border-radius: 11px; }
+.code-head { background: rgba(255,255,255,0.05); }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+
+/* ============ overlay: mature chrome ============ */
+.ov-drag {
+  padding: 11px 12px 10px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-3) 60%, transparent), transparent);
+  backdrop-filter: blur(14px);
+}
+.ov-gem {
+  width: 18px; height: 18px; border-radius: 6px; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 45%, transparent);
+  transform: rotate(45deg) scale(0.82);
+}
+.ov-brand { font-size: 13px; letter-spacing: 0.4px; }
+.ov-hint { font-size: 10px; opacity: 0.75; }
+.ov-btn { transition: background .15s ease, color .15s ease; }
+
+/* tools row: watch / write / size */
+.ov-tools { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; position: relative; }
+.ov-tool {
+  display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px;
+  border-radius: 99px; border: 1px solid var(--border); background: transparent;
+  color: var(--text-dim); font-size: 11.5px; font-weight: 650; transition: all .15s ease;
+}
+.ov-tool:hover { color: var(--text); border-color: var(--accent); }
+.ov-tool.active { background: var(--accent-soft); color: var(--text); border-color: var(--accent); }
+.ov-tool.rec { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.ov-tools-right { margin-left: auto; }
+.ov-size-label {
+  font-family: var(--mono); font-size: 10.5px; color: var(--text-faint);
+  background: transparent; border: 1px solid var(--border); border-radius: 7px;
+  padding: 4px 8px; transition: all .15s ease;
+}
+.ov-size-label:hover { color: var(--text); border-color: var(--accent); }
+
+/* watch bar */
+.ov-watchbar {
+  display: flex; align-items: center; gap: 8px; padding: 7px 12px;
+  border-bottom: 1px solid var(--border); font-size: 11.5px; color: var(--text-dim);
+  background: color-mix(in srgb, var(--danger) 7%, transparent); flex-shrink: 0;
+}
+.ov-watching-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--danger); flex-shrink: 0;
+  animation: micpulse 1.3s ease-in-out infinite;
+}
+.ov-watchtext strong { color: var(--text); }
+.ov-watch-sens {
+  margin-left: auto; font-size: 10.5px; font-family: var(--mono); padding: 3px 6px;
+  border-radius: 6px; border: 1px solid var(--border); background: var(--bg-3); color: var(--text);
+}
+
+/* popovers (write styles / sizes) */
+.ov-pop {
+  position: absolute; bottom: calc(100% + 6px); left: 10px; z-index: 40;
+  background: var(--panel); backdrop-filter: blur(16px);
+  border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow);
+  padding: 10px; min-width: 300px; animation: rise .16s ease;
+}
+.ov-pop.right { left: auto; right: 10px; min-width: 250px; }
+.ov-pop-title { font-size: 11px; font-weight: 750; letter-spacing: .5px; text-transform: uppercase; color: var(--text-faint); margin: 2px 4px 8px; }
+.ov-pop-note { font-size: 10.5px; color: var(--text-faint); margin: 8px 4px 2px; }
+.ov-composer { position: relative; }
+.ov-write-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ov-write-style {
+  padding: 9px 10px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--bg-3); color: var(--text); font-size: 12px; font-weight: 600; text-align: left;
+  transition: all .13s ease;
+}
+.ov-write-style:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-1px); }
+.ov-size-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.ov-size-preset {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 6px;
+  border-radius: 9px; border: 1px solid var(--border); background: var(--bg-3); color: var(--text);
+  transition: all .13s ease;
+}
+.ov-size-preset strong { font-size: 13px; }
+.ov-size-preset span { font-family: var(--mono); font-size: 9.5px; color: var(--text-faint); }
+.ov-size-preset:hover { border-color: var(--accent); transform: translateY(-1px); }
+.ov-size-preset.active { border-color: var(--accent); background: var(--accent-soft); }
+
+/* write result action bar */
+.ov-actionbar {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 8px 12px; border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--ok) 7%, transparent); flex-shrink: 0;
+}
+.ov-actionbar-label { font-size: 11.5px; font-weight: 700; color: var(--ok); margin-right: 4px; }
+
+/* resize grip */
+.ov-resize {
+  position: absolute; right: 2px; bottom: 2px; width: 18px; height: 18px;
+  cursor: nwse-resize; z-index: 25; border-radius: 0 0 6px 0;
+  background:
+    linear-gradient(135deg, transparent 55%, var(--text-faint) 56%, var(--text-faint) 60%, transparent 61%),
+    linear-gradient(135deg, transparent 68%, var(--text-faint) 69%, var(--text-faint) 73%, transparent 74%),
+    linear-gradient(135deg, transparent 81%, var(--text-faint) 82%, var(--text-faint) 86%, transparent 87%);
+  opacity: .55;
+}
+.ov-resize:hover { opacity: 1; }
+
+/* status line */
+.ov-statusline {
+  display: flex; justify-content: center; margin-top: 5px;
+  font-size: 9.5px; color: var(--text-faint); font-family: var(--mono);
+  opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* capture buttons — refined */
+.ov-cap { transition: all .15s ease; font-size: 11.5px; }
+.ov-cap:hover:not(:disabled) { transform: translateY(-1px); }
+.ov-composer { background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bg-3) 45%, transparent)); }

@@ -22,6 +22,15 @@ contextBridge.exposeInMainWorld('prismDesktop', {
   /** Keep (or stop keeping) the panel above other windows. Returns current state. */
   setPin: (pin) => ipcRenderer.invoke('prism:set-pin', pin),
 
+  /** Resize the panel. Returns the applied { w, h }. */
+  setSize: (w, h) => ipcRenderer.invoke('prism:set-size', w, h),
+
+  /**
+   * "Insert into app": sets the clipboard and, when supported, simulates a
+   * paste keystroke into the app you were just using. Returns { copied, pasted }.
+   */
+  writeText: (text) => ipcRenderer.invoke('prism:write', text),
+
   hide: () => ipcRenderer.send('prism:hide'),
   openFullApp: () => ipcRenderer.send('prism:open-full'),
 });

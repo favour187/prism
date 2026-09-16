@@ -20,6 +20,9 @@
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8"
   },
+  "optionalDependencies": {
+    "@jitsi/robotjs": "^0.6.24"
+  },
   "build": {
     "appId": "app.prism.assistant.desktop",
     "productName": "Prism",

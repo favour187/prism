@@ -32,8 +32,11 @@ Powered by **Featherless AI** · Streaming SSE · Vision + OCR fallback · SQLit
 
 ### 📸 Screen assistant
 - **Ctrl/⌘ + Shift + A** toggles the floating assistant panel (always-on-top when using the desktop shell).
-- Capture modes: **full screen**, **window/tab**, or **region** (drag-select crop) — via the browser's native picker.
-- **Privacy by design: the screen is never recorded.** A single frame is captured only when you press a button, with a **preview before sending**.
+- Capture modes: **full screen**, **window/tab**, or **region** (drag-select crop).
+- **◉ Watch mode** (opt-in): samples your screen on an interval and keeps a screenshot **only when something visibly moves** — local frame differencing; static frames are discarded instantly. Sensitivity: low/med/high.
+- **✍️ Write mode**: rewrite text (grammar, tone, brevity, translation) via the model and **insert it straight into the app you were using** (true keystroke paste on desktop; clipboard fallback everywhere else).
+- **Panel sizing**: live measurements, S/M/L presets, drag-to-resize (desktop).
+- **Privacy by design: no continuous recording.** Captures — single or motion-triggered — only happen when you start them.
 - Captures are routed through the vision model → with **OCR fallback** (Tesseract) if the vision model is unavailable, so terminal output / error dialogs still get analyzed.
 
 ### 🔐 Security & privacy
