@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, streamChat } from './api.js';
-import { grabFrame, isDesktop } from './capture.js';
+import { grabFrame, isAndroid, androidCapture } from './capture.js';
 import RegionSelector from './components/RegionSelector.jsx';
 import MessageList from './components/MessageList.jsx';
 
 const desktop = window.prismDesktop ?? null;
+const android = isAndroid();
 let shotSeq = 0;
 
 /**
@@ -61,8 +62,12 @@ export default function OverlayApp() {
   const captureScreen = async () => {
     setBusy('screen');
     try {
-      const dataUrl = desktop ? await desktop.captureScreen() : (await grabFrame()).dataUrl;
-      addShot(dataUrl, 'screen.png');
+      const dataUrl = android
+        ? await androidCapture('screen')
+        : desktop
+          ? await desktop.captureScreen()
+          : (await grabFrame()).dataUrl;
+      if (dataUrl) addShot(dataUrl, 'screen.png');
     } catch (err) {
       flash(err?.name === 'NotAllowedError' ? 'Capture cancelled.' : `Capture failed: ${err.message}`);
     } finally {
@@ -101,7 +106,12 @@ export default function OverlayApp() {
   const captureRegion = async () => {
     setBusy('region');
     try {
-      if (desktop) {
+      if (android) {
+        // Android captures one full frame (MediaProjection), then you crop
+        // the region right here in the panel.
+        const dataUrl = await androidCapture('screen');
+        if (dataUrl) setRegionFrame({ dataUrl });
+      } else if (desktop) {
         const dataUrl = await desktop.captureRegion(); // transparent selector over your screen
         if (dataUrl) addShot(dataUrl, 'region.png');
       } else {
@@ -196,10 +206,13 @@ export default function OverlayApp() {
         )}
         <span className="ov-hint no-drag">{kbd}</span>
         <div className="ov-actions no-drag">
-          <button className={`ov-btn ${pinned ? 'on' : ''}`} title={pinned ? 'Unpin from top' : 'Keep on top'} onClick={togglePin}>📌</button>
+          {!android && (
+            <button className={`ov-btn ${pinned ? 'on' : ''}`} title={pinned ? 'Unpin from top' : 'Keep on top'} onClick={togglePin}>📌</button>
+          )}
+          {android && <a className="ov-btn" title="Open full app" href="/" target="_blank" rel="noreferrer">⤢</a>}
           {desktop
             ? <button className="ov-btn" title="Open full app" onClick={() => desktop.openFullApp()}>⤢</button>
-            : <a className="ov-btn" title="Open full app" href="/" target="_blank" rel="noreferrer">⤢</a>}
+            : !android && <a className="ov-btn" title="Open full app" href="/" target="_blank" rel="noreferrer">⤢</a>}
           {desktop && <button className="ov-btn" title="Hide (reopen with hotkey)" onClick={() => desktop.hide()}>✕</button>}
           {!desktop && messages.length > 0 && <button className="ov-btn" title="New thread" onClick={newThread}>✕</button>}
         </div>
@@ -259,13 +272,15 @@ export default function OverlayApp() {
       )}
 
       <footer className="ov-composer">
-        <div className="ov-capture-row">
+        <div className={`ov-capture-row ${android ? 'two' : ''}`}>
           <button className="ov-cap" disabled={Boolean(busy) || Boolean(stream)} onClick={captureScreen} title="Capture the whole screen">
             🖥<span>Screen</span>{busy === 'screen' && <span className="spinner" />}
           </button>
-          <button className="ov-cap" disabled={Boolean(busy) || Boolean(stream)} onClick={showWindowPicker} title="Capture one app window">
-            🪟<span>Window</span>{busy === 'window' && <span className="spinner" />}
-          </button>
+          {!android && (
+            <button className="ov-cap" disabled={Boolean(busy) || Boolean(stream)} onClick={showWindowPicker} title="Capture one app window">
+              🪟<span>Window</span>{busy === 'window' && <span className="spinner" />}
+            </button>
+          )}
           <button className="ov-cap" disabled={Boolean(busy) || Boolean(stream)} onClick={captureRegion} title="Drag-select a region">
             ✂️<span>Region</span>{busy === 'region' && <span className="spinner" />}
           </button>

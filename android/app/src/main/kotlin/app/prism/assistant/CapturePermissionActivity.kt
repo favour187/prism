@@ -1,0 +1,40 @@
+package app.prism.assistant
+
+import android.app.Activity
+import android.content.Intent
+import android.media.projection.MediaProjectionManager
+import android.os.Bundle
+import androidx.activity.result.contract.ActivityResultContracts
+
+/**
+ * Invisible trampoline: the MediaProjection consent dialog must be launched
+ * from an Activity, so the service bounces through this transparent host.
+ * The dialog itself is the privacy gate — capture never starts without the
+ * user's explicit tap, and only a single frame is taken.
+ */
+class CapturePermissionActivity : Activity() {
+
+    private val captureLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val intent = Intent(this, FloatingService::class.java)
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            intent.action = FloatingService.ACTION_PROJECTION_GRANTED
+            intent.putExtra(FloatingService.EXTRA_RESULT_CODE, result.resultCode)
+            intent.putExtra(FloatingService.EXTRA_RESULT_DATA, result.data)
+        } else {
+            intent.action = FloatingService.ACTION_CAPTURE_DENIED
+        }
+        startService(intent)
+        finish()
+        overridePendingTransition(0, 0)
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) {
+            val mpm = getSystemService(MediaProjectionManager::class.java)
+            captureLauncher.launch(mpm.createScreenCaptureIntent())
+        }
+    }
+}

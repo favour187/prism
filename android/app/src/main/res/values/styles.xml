@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="prism_bg">#0E1016</color>
+    <color name="prism_accent">#7C6CFF</color>
+    <color name="ic_launcher_background">#131527</color>
+
+    <style name="Theme.Prism" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/prism_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/prism_bg</item>
+        <item name="android:textColorPrimary">#E8EAF2</item>
+        <item name="android:colorAccent">@color/prism_accent</item>
+    </style>
+
+    <style name="Theme.Prism.Transparent" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
+</resources>

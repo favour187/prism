@@ -36,3 +36,36 @@ export async function grabFrame() {
 export function isDesktop() {
   return Boolean(window.prismDesktop?.isDesktop);
 }
+
+/** True when running inside the Prism Android overlay WebView. */
+export function isAndroid() {
+  return typeof window.prismAndroid?.requestCapture === 'function';
+}
+
+/**
+ * Ask the Android shell for a screenshot. The native side handles the
+ * MediaProjection consent dialog, captures exactly ONE frame, restores the
+ * panel, and resolves the promise with a PNG data URL (or null if cancelled).
+ */
+export function androidCapture(kind = 'screen') {
+  return new Promise((resolve) => {
+    const token = `c${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+    const store = (window.__prismCaptureResolvers ??= {});
+    store[token] = resolve;
+    try {
+      window.prismAndroid.requestCapture(kind, token);
+    } catch {
+      delete store[token];
+      resolve(null);
+    }
+  });
+}
+
+// Native → web callback target for androidCapture().
+window.__prismCaptureResult = (token, dataUrl) => {
+  const store = window.__prismCaptureResolvers;
+  if (store?.[token]) {
+    store[token](dataUrl || null);
+    delete store[token];
+  }
+};

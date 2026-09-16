@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Prism</string>
+    <string name="channel_name">Prism assistant</string>
+    <string name="channel_desc">Persistent floating assistant status</string>
+    <string name="notif_title">Prism is active</string>
+    <string name="notif_text">Bubble visible · tap it, capture, ask. Nothing is recorded continuously.</string>
+</resources>

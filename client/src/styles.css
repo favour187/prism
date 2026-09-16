@@ -562,3 +562,4 @@ html[data-theme='light'] .code-block { background: #0d1117; color: #e6edf3; }
 .welcome-badge.sm { width: 42px; height: 42px; font-size: 19px; border-radius: 13px; margin-bottom: 10px; }
 .welcome-mini .welcome-sub { font-size: 12.5px; margin-bottom: 14px; }
 .suggestions.s1 { grid-template-columns: 1fr; }
+.ov-capture-row.two { grid-template-columns: repeat(2, 1fr); }

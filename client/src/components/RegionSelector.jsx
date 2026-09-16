@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from 'react';
  */
 export default function RegionSelector({ frame, onDone, onCancel }) {
   const overlayRef = useRef(null);
+  const imgRef = useRef(null);
+  const [natural, setNatural] = useState({ w: frame.width ?? 0, h: frame.height ?? 0 });
   const [drag, setDrag] = useState(null);
   const [box, setBox] = useState(null);
 
@@ -37,17 +39,21 @@ export default function RegionSelector({ frame, onDone, onCancel }) {
     const { x, y, w, h } = toRect(d);
     if (w < 8 || h < 8) return onCancel();
     // Map overlay coords → image pixels, accounting for object-fit: contain.
+    // Prefer the image's natural size (Android bridge doesn't pass dimensions).
+    const iw = natural.w || frame.width || imgRef.current?.naturalWidth;
+    const ih = natural.h || frame.height || imgRef.current?.naturalHeight;
+    if (!iw || !ih) return onCancel();
     const overlay = overlayRef.current.getBoundingClientRect();
-    const scale = Math.min(overlay.width / frame.width, overlay.height / frame.height);
-    const drawnW = frame.width * scale;
-    const drawnH = frame.height * scale;
+    const scale = Math.min(overlay.width / iw, overlay.height / ih);
+    const drawnW = iw * scale;
+    const drawnH = ih * scale;
     const offsetX = (overlay.width - drawnW) / 2;
     const offsetY = (overlay.height - drawnH) / 2;
 
     const sx = Math.max(0, (x - offsetX) / scale);
     const sy = Math.max(0, (y - offsetY) / scale);
-    const sw = Math.max(1, Math.min(w / scale, frame.width - sx));
-    const sh = Math.max(1, Math.min(h / scale, frame.height - sy));
+    const sw = Math.max(1, Math.min(w / scale, iw - sx));
+    const sh = Math.max(1, Math.min(h / scale, ih - sy));
 
     const src = new Image();
     src.onload = () => {
@@ -82,7 +88,18 @@ export default function RegionSelector({ frame, onDone, onCancel }) {
       role="dialog"
       aria-label="Select region to capture"
     >
-      <img src={frame.dataUrl} alt="Captured frame — drag to select a region" className="region-frame" draggable="false" />
+      <img
+        ref={imgRef}
+        src={frame.dataUrl}
+        alt="Captured frame — drag to select a region"
+        className="region-frame"
+        draggable="false"
+        onLoad={(e) => {
+          if (!frame.width && e.currentTarget.naturalWidth) {
+            setNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight });
+          }
+        }}
+      />
       <div className="region-hint">Drag to select · <kbd>Enter</kbd> to capture · <kbd>Esc</kbd> to cancel</div>
       {rect && rect.w > 0 && (
         <>
