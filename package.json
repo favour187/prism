@@ -1,0 +1,21 @@
+{
+  "name": "prism",
+  "version": "1.0.0",
+  "description": "Prism — an AI screen & code assistant. Chat, debug, and capture your screen on demand. Powered by Featherless AI.",
+  "private": true,
+  "scripts": {
+    "setup": "npm --prefix server install && npm --prefix client install",
+    "build": "npm --prefix server install && npm --prefix client install && npm --prefix client run build",
+    "start": "node server/index.js",
+    "dev": "concurrently -k -n server,client \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "test": "node server/tests/smoke.test.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=18.18"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "prism-desktop",
+  "version": "1.0.0",
+  "description": "Optional Electron shell for Prism — OS-level global shortcut + always-on-top.",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "PRISM_URL=http://localhost:5173 electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.2.0"
+  }
+}

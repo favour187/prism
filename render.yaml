@@ -1,0 +1,27 @@
+# Render Blueprint — deploys Prism as a single web service.
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: prism
+    runtime: node
+    plan: starter            # a disk-backed plan is recommended for SQLite persistence
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: AI_PROVIDER
+        value: featherless
+      - key: FEATHERLESS_API_KEY
+        sync: false          # set this in the Render dashboard (server-side secret)
+      - key: FEATHERLESS_CHAT_MODEL
+        value: Qwen/Qwen2.5-Coder-32B-Instruct
+      - key: FEATHERLESS_VISION_MODEL
+        value: Qwen/Qwen2.5-VL-72B-Instruct
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: prism-data
+      mountPath: /var/data
+      sizeGB: 1
