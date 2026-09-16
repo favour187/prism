@@ -215,7 +215,8 @@ class FloatingService : Service() {
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    if (!dragged) togglePanel() else true
+                    if (!dragged) togglePanel()
+                    true
                 }
                 else -> false
             }
