@@ -9,6 +9,7 @@ import { apiLimiter } from './middleware/rateLimit.js';
 import chatRouter from './routes/chat.js';
 import conversationsRouter from './routes/conversations.js';
 import uploadsRouter from './routes/uploads.js';
+import voiceRouter from './routes/voice.js';
 import systemRouter from './routes/system.js';
 import { getProvider } from './providers/index.js';
 
@@ -57,6 +58,7 @@ app.use('/api', apiLimiter);
 app.use('/api/chat', chatRouter);
 app.use('/api/conversations', conversationsRouter);
 app.use('/api/uploads', uploadsRouter);
+app.use('/api/transcribe', voiceRouter);
 app.use('/api', systemRouter);
 app.use('/api', notFoundApi);
 

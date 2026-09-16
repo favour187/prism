@@ -171,6 +171,18 @@ async function main() {
     const search = await (await fetch(`${BASE}/api/conversations?query=${encodeURIComponent('TypeScript')}`)).json();
     assert(search.conversations.length >= 1, 'search finds conversations by message content');
 
+    // ---- voice transcription (mock STT provider) ----
+    console.log('• voice transcription');
+    const audioForm = new FormData();
+    audioForm.append('audio', new Blob([Buffer.from('RIFF....WAVEfmt fake-audio-bytes')], { type: 'audio/webm' }), 'voice.webm');
+    const tr = await fetch(`${BASE}/api/transcribe`, { method: 'POST', body: audioForm });
+    const trJson = await tr.json();
+    assert(tr.status === 200 && trJson.text.includes('mock transcription'), 'POST /api/transcribe returns a transcript');
+    const noAudio = await fetch(`${BASE}/api/transcribe`, { method: 'POST', body: new FormData() });
+    assert(noAudio.status === 400, 'transcribe without audio is a structured 400');
+    const cfg2 = await (await fetch(`${BASE}/api/config`)).json();
+    assert(cfg2.voice?.stt === true, 'config advertises STT capability');
+
     // ---- privacy export ----
     console.log('• privacy');
     const exported = await (await fetch(`${BASE}/api/privacy/export`)).json();

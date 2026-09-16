@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, streamChat } from './api.js';
 import { grabFrame, isAndroid, androidCapture } from './capture.js';
+import { VoiceRecorder, transcribe, speak, stopSpeaking, voiceSupported, ttsSupported } from './voice.js';
 import RegionSelector from './components/RegionSelector.jsx';
 import MessageList from './components/MessageList.jsx';
 
@@ -27,8 +28,12 @@ export default function OverlayApp() {
   const [notice, setNotice] = useState(null);
   const [pinned, setPinned] = useState(true);
   const [cfg, setCfg] = useState(null);
+  const [mic, setMic] = useState('idle'); // idle | recording | transcribing
+  const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('prism.autospeak') !== '0');
   const abortRef = useRef(null);
   const noticeTimer = useRef(null);
+  const recorderRef = useRef(null);
+  const streamTextRef = useRef('');
 
   const [conversationId, setConversationId] = useState(
     () => localStorage.getItem('prism.overlayConversationId') ?? null,
@@ -124,11 +129,54 @@ export default function OverlayApp() {
     }
   };
 
+  // --------------------------------- voice ----------------------------------
+  useEffect(() => {
+    localStorage.setItem('prism.autospeak', autoSpeak ? '1' : '0');
+  }, [autoSpeak]);
+
+  const toggleMic = async () => {
+    if (mic === 'recording') {
+      setMic('transcribing');
+      const { blob, mime } = (await recorderRef.current?.stop()) ?? {};
+      recorderRef.current = null;
+      try {
+        if (!blob) throw new Error('Nothing was recorded.');
+        const transcript = await transcribe(blob, mime);
+        if (transcript) {
+          setText((t) => (t.trim() ? `${t.trim()} ${transcript}` : transcript));
+        } else {
+          flash('Heard silence — try again closer to the mic.');
+        }
+      } catch (err) {
+        flash(err.message ?? 'Transcription failed.');
+      } finally {
+        setMic('idle');
+      }
+      return;
+    }
+    if (mic === 'transcribing') return;
+    stopSpeaking();
+    try {
+      recorderRef.current = new VoiceRecorder();
+      await recorderRef.current.start();
+      setMic('recording');
+    } catch (err) {
+      recorderRef.current = null;
+      flash(
+        err?.name === 'NotAllowedError'
+          ? 'Microphone permission denied — allow access in OS/browser settings.'
+          : `Mic unavailable: ${err.message}`,
+      );
+    }
+  };
+
   // -------------------------------- sending ---------------------------------
   const canSend = !stream && (text.trim() || shots.length > 0);
 
   const send = useCallback(() => {
     if (!canSend) return;
+    stopSpeaking();
+    streamTextRef.current = '';
     const content = text.trim();
     const payloadShots = shots.map((s) => s.dataUrl);
 
@@ -157,21 +205,29 @@ export default function OverlayApp() {
           }
           setStream((s) => (s ? { ...s, meta: { ...(s.meta ?? {}), ...meta } } : s));
         },
-        onDelta: (delta) => setStream((s) => (s ? { ...s, text: s.text + delta } : s)),
+        onDelta: (delta) => {
+          streamTextRef.current += delta;
+          setStream((s) => (s ? { ...s, text: s.text + delta } : s));
+        },
         onNotice: (n) => flash(n, 5200),
         onError: (err) => setStream((s) => (s ? { ...s, error: err } : { text: '', meta: null, error: err })),
         onDone: async (done) => {
           setStream(null);
+          const finalText = streamTextRef.current;
           if (done?.conversationId) {
             try {
               const data = await api.getConversation(done.conversationId);
               setMessages(data.messages);
             } catch { /* keep optimistic view */ }
           }
+          // Speak the answer when voice-out is enabled.
+          if (autoSpeak && finalText && ttsSupported()) {
+            speak(finalText).catch(() => {});
+          }
         },
       },
     );
-  }, [canSend, text, shots, conversationId, flash]);
+  }, [canSend, text, shots, conversationId, flash, autoSpeak]);
 
   const stop = () => {
     abortRef.current?.abort();
@@ -206,6 +262,23 @@ export default function OverlayApp() {
         )}
         <span className="ov-hint no-drag">{kbd}</span>
         <div className="ov-actions no-drag">
+          {ttsSupported() && (
+            <button
+              className={`ov-btn ${autoSpeak ? 'on' : ''}`}
+              title={autoSpeak ? 'Voice answers ON — click to mute' : 'Voice answers OFF — click to hear answers'}
+              onClick={() => {
+                setAutoSpeak((v) => {
+                  if (v) stopSpeaking();
+                  return !v;
+                });
+              }}
+            >
+              {autoSpeak ? '🔊' : '🔇'}
+            </button>
+          )}
+          {!android && messages.length > 0 && (
+            <button className="ov-btn" title="New thread" onClick={newThread}>＋</button>
+          )}
           {!android && (
             <button className={`ov-btn ${pinned ? 'on' : ''}`} title={pinned ? 'Unpin from top' : 'Keep on top'} onClick={togglePin}>📌</button>
           )}
@@ -214,7 +287,6 @@ export default function OverlayApp() {
             ? <button className="ov-btn" title="Open full app" onClick={() => desktop.openFullApp()}>⤢</button>
             : !android && <a className="ov-btn" title="Open full app" href="/" target="_blank" rel="noreferrer">⤢</a>}
           {desktop && <button className="ov-btn" title="Hide (reopen with hotkey)" onClick={() => desktop.hide()}>✕</button>}
-          {!desktop && messages.length > 0 && <button className="ov-btn" title="New thread" onClick={newThread}>✕</button>}
         </div>
       </header>
 
@@ -286,6 +358,21 @@ export default function OverlayApp() {
           </button>
         </div>
         <div className="ov-input-row">
+          {voiceSupported() && (
+            <button
+              className={`ov-mic ${mic}`}
+              onClick={toggleMic}
+              disabled={Boolean(stream) || mic === 'transcribing'}
+              title={
+                mic === 'recording' ? 'Tap to stop & transcribe'
+                  : mic === 'transcribing' ? 'Transcribing…'
+                    : 'Tap to talk — Prism hears you'
+              }
+            >
+              {mic === 'recording' ? '⏺' : mic === 'transcribing' ? '…' : '🎤'}
+            </button>
+          )}
+          {mic === 'recording' && <span className="ov-rec">listening… tap ⏺ to stop</span>}
           <input
             className="ov-input"
             placeholder={shots.length ? 'Ask about the capture…' : 'Ask anything…'}

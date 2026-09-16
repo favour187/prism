@@ -11,11 +11,13 @@ import { AIProvider, ProviderError } from './base.js';
 export class FeatherlessProvider extends AIProvider {
   id = 'featherless';
 
-  constructor({ apiKey, baseUrl, timeoutMs }) {
+  constructor({ apiKey, baseUrl, timeoutMs, sttModel = null, sttBaseUrl = null }) {
     super();
     this.apiKey = apiKey;
     this.baseUrl = baseUrl;
     this.timeoutMs = timeoutMs;
+    this.sttModel = sttModel;
+    this.sttBaseUrl = sttBaseUrl ?? baseUrl;
   }
 
   isReady() {
@@ -168,5 +170,57 @@ export class FeatherlessProvider extends AIProvider {
     if (!res.ok) return [];
     const json = await res.json().catch(() => ({}));
     return Array.isArray(json?.data) ? json.data.map((m) => m.id).filter(Boolean) : [];
+  }
+
+    supportsTranscription() {
+    return Boolean(this.apiKey && this.sttModel);
+  }
+
+  /**
+   * Speech-to-text via the OpenAI-compatible /audio/transcriptions endpoint.
+   * Works with Featherless-hosted whisper-style models (or any compatible
+   * endpoint when FEATHERLESS_STT_BASE_URL is set).
+   */
+  async transcribeAudio({ buffer, mime, filename }) {
+    this.#assertReady();
+    if (!this.sttModel) {
+      throw new ProviderError('Speech-to-text is not configured (FEATHERLESS_STT_MODEL).', 'STT_NOT_CONFIGURED', 503);
+    }
+    const form = new FormData();
+    form.append('file', new Blob([buffer], { type: mime }), filename || 'audio.webm');
+    form.append('model', this.sttModel);
+    form.append('response_format', 'json');
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.min(this.timeoutMs, 90_000));
+    let res;
+    try {
+      res = await fetch(`${this.sttBaseUrl}/audio/transcriptions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.apiKey}` },
+        body: form,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      throw new ProviderError(
+        err?.name === 'AbortError' ? 'Transcription timed out.' : `Cannot reach STT endpoint: ${err.message}`,
+        err?.name === 'AbortError' ? 'PROVIDER_TIMEOUT' : 'PROVIDER_UNREACHABLE',
+        err?.name === 'AbortError' ? 504 : 502,
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!res.ok) {
+      let detail = '';
+      try { detail = (await res.json())?.error?.message ?? ''; } catch { detail = await res.text().catch(() => ''); }
+      const code = res.status === 404 ? 'STT_MODEL_NOT_FOUND' : 'PROVIDER_UPSTREAM_ERROR';
+      throw new ProviderError(
+        `Speech-to-text failed (${res.status}): ${detail || res.statusText}. Check FEATHERLESS_STT_MODEL / endpoint.`,
+        code,
+        res.status === 429 ? 429 : 502,
+      );
+    }
+    const json = await res.json();
+    return (json?.text ?? '').trim();
   }
 }

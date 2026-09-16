@@ -8,6 +8,8 @@ export default function ChatHeader({
   model,
   onModelChange,
   onOpenAssistant,
+  speakOn = false,
+  onToggleSpeak,
 }) {
   const models = cfg?.models?.length ? cfg.models : [];
   const defaultModel = cfg?.defaults?.chatModel;
@@ -51,6 +53,17 @@ export default function ChatHeader({
           <span className="assistant-btn-label">&nbsp;Capture</span>
           <kbd className="kbd">⌃⇧A</kbd>
         </button>
+
+        {onToggleSpeak && (
+          <button
+            className="icon-btn"
+            onClick={onToggleSpeak}
+            title={speakOn ? 'Voice answers ON — click to mute' : 'Voice answers OFF — click to hear answers'}
+            aria-label="Toggle voice answers"
+          >
+            {speakOn ? '🔊' : '🔇'}
+          </button>
+        )}
 
         <button
           className="icon-btn"

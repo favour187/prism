@@ -12,7 +12,7 @@
  *   npm install && npm start                 → uses https://prism-yks3.onrender.com
  *   PRISM_URL=http://localhost:5173 npm run dev
  */
-const { app, BrowserWindow, globalShortcut, ipcMain, screen, desktopCapturer, shell } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, screen, desktopCapturer, shell, session } = require('electron');
 const path = require('node:path');
 
 const PRISM_URL = (process.env.PRISM_URL ?? 'https://prism-yks3.onrender.com').replace(/\/$/, '');
@@ -208,9 +208,15 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    // Voice input (getUserMedia mic) and TTS are part of the assistant UX.
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => {
+      cb(permission === 'media' || permission === 'audioCapture' || permission === 'speaker-selection');
+    });
+
     createWindow();
     const ok = globalShortcut.register(SHORTCUT, toggleWindow);
     if (!ok) console.warn('[prism-desktop] could not register', SHORTCUT);
+    globalShortcut.register('CommandOrControl+Shift+Q', () => app.quit());
   });
 
   // Assistant-style: closing windows keeps the daemon alive (reopen via hotkey).

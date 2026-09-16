@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { VoiceRecorder, transcribe, voiceSupported } from '../voice.js';
 
 const ACCEPT =
   '.js,.mjs,.cjs,.jsx,.ts,.mts,.cts,.tsx,.py,.rb,.go,.rs,.java,.c,.h,.cc,.cpp,.hpp,.cs,.php,.swift,.kt,.kts,.scala,.dart,.lua,.r,.jl,.ex,.exs,.erl,.hs,.clj,.groovy,.pl,.sh,.bash,.zsh,.ps1,.sql,.html,.vue,.svelte,.css,.scss,.sass,.less,.json,.yaml,.yml,.toml,.ini,.cfg,.xml,.svg,.csv,.tsv,.md,.markdown,.txt,.log,.dockerfile,.tf,.hcl,.proto,.graphql,.prisma,.diff,.patch,.pdf,.docx,.png,.jpg,.jpeg,.webp,.gif';
@@ -31,10 +32,41 @@ export default function Composer({
   onClearAction,
   onAction,
   onOpenAssistant,
+  onToast,
 }) {
   const [text, setText] = useState('');
+  const [mic, setMic] = useState('idle'); // idle | recording | transcribing
   const taRef = useRef(null);
   const fileRef = useRef(null);
+  const recorderRef = useRef(null);
+
+  const toggleMic = async () => {
+    if (mic === 'recording') {
+      setMic('transcribing');
+      const { blob, mime } = (await recorderRef.current?.stop()) ?? {};
+      recorderRef.current = null;
+      try {
+        if (!blob) throw new Error('Nothing recorded.');
+        const transcript = await transcribe(blob, mime);
+        setText((t) => (t.trim() && transcript ? `${t.trim()} ${transcript}` : transcript ?? t));
+        if (!transcript) onToast?.('Heard silence — try again.');
+      } catch (err) {
+        onToast?.(err.message, 'error');
+      } finally {
+        setMic('idle');
+      }
+      return;
+    }
+    if (mic === 'transcribing') return;
+    try {
+      recorderRef.current = new VoiceRecorder();
+      await recorderRef.current.start();
+      setMic('recording');
+    } catch (err) {
+      recorderRef.current = null;
+      onToast?.(err?.name === 'NotAllowedError' ? 'Microphone permission denied.' : `Mic unavailable: ${err.message}`, 'error');
+    }
+  };
 
   useEffect(() => {
     const ta = taRef.current;
@@ -114,6 +146,16 @@ export default function Composer({
             onClick={onOpenAssistant} disabled={disabled}>
             📸
           </button>
+          {voiceSupported() && (
+            <button
+              className={`tool-btn mic ${mic === 'recording' ? 'recording' : ''}`}
+              title={mic === 'recording' ? 'Stop & transcribe' : mic === 'transcribing' ? 'Transcribing…' : 'Tap to talk (voice input)'}
+              onClick={toggleMic}
+              disabled={disabled && mic === 'idle'}
+            >
+              {mic === 'recording' ? '⏺' : mic === 'transcribing' ? '…' : '🎤'}
+            </button>
+          )}
           <span className="tool-sep" />
           {ACTIONS.map((a) => (
             <button

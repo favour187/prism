@@ -17,6 +17,8 @@ export function getProvider() {
       apiKey: config.featherless.apiKey,
       baseUrl: config.featherless.baseUrl,
       timeoutMs: config.featherless.timeoutMs,
+      sttModel: config.featherless.sttModel,
+      sttBaseUrl: config.featherless.sttBaseUrl,
     });
   }
   return cached;

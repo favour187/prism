@@ -23,6 +23,9 @@ const config = {
     baseUrl: (process.env.FEATHERLESS_BASE_URL ?? 'https://api.featherless.ai/v1').replace(/\/$/, ''),
     chatModel: process.env.FEATHERLESS_CHAT_MODEL ?? 'Qwen/Qwen2.5-Coder-32B-Instruct',
     visionModel: process.env.FEATHERLESS_VISION_MODEL ?? 'Qwen/Qwen2.5-VL-72B-Instruct',
+    // Speech-to-text: any OpenAI-compatible /audio/transcriptions endpoint.
+    sttModel: process.env.FEATHERLESS_STT_MODEL ?? 'openai/whisper-large-v3',
+    sttBaseUrl: (process.env.FEATHERLESS_STT_BASE_URL ?? '').replace(/\/$/, '') || null,
     timeoutMs: num(process.env.FEATHERLESS_TIMEOUT_MS, 120_000),
     maxTokens: num(process.env.FEATHERLESS_MAX_TOKENS, 4096),
     temperature: Number.isFinite(Number(process.env.FEATHERLESS_TEMPERATURE))
@@ -34,6 +37,7 @@ const config = {
   maxUploadMb: num(process.env.MAX_UPLOAD_MB, 12),
   maxUploadFiles: num(process.env.MAX_UPLOAD_FILES, 6),
   maxInlineImageMb: num(process.env.MAX_INLINE_IMAGE_MB, 9),
+  maxAudioMb: num(process.env.MAX_AUDIO_MB, 15),
   historyMessages: num(process.env.HISTORY_MESSAGES, 24),        // conversation memory window
   maxContextFilesChars: num(process.env.MAX_CONTEXT_FILES_CHARS, 180_000),
   maxFileChars: num(process.env.MAX_FILE_CHARS, 40_000),

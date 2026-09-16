@@ -25,6 +25,11 @@ Powered by **Featherless AI** · Streaming SSE · Vision + OCR fallback · SQLit
 - **Attach real project files** (code, PDF, DOCX) — they're text-extracted server-side and injected as authoritative codebase context, so you don't have to rely on screenshots.
 - `Explain` / `Fix` / `Improve` / `Generate` actions (from the composer _or_ hovering any code block).
 
+### 🎤 Voice (hears you, speaks back)
+- Tap the 🎤, talk, tap again — Prism **transcribes your speech** (backend STT; audio never stored) into the message box
+- Prism **speaks the answers aloud** (system voice; markdown-aware: code blocks are summarized, not spelled out) — toggle 🔊/🔇 in the header
+- Works in the web app, the desktop overlay, and the Android panel
+
 ### 📸 Screen assistant
 - **Ctrl/⌘ + Shift + A** toggles the floating assistant panel (always-on-top when using the desktop shell).
 - Capture modes: **full screen**, **window/tab**, or **region** (drag-select crop) — via the browser's native picker.
@@ -162,8 +167,18 @@ Environment knobs: `PRISM_URL`, `PRISM_SHORTCUT`, `PRISM_WIDTH`, `PRISM_HEIGHT`.
 
 The same compact UI is also available in any browser at **`/?overlay=1`** (uses the browser's native picker for captures — the Electron build skips the dialogs).
 
-> macOS: grant **Screen Recording** permission to your terminal/Electron on first capture.
-> Packaging (optional): add `electron-builder` to produce a `.dmg` / `.exe` installer.
+**Installers are built by GitHub Actions** on every push that touches `desktop/` —
+**Actions → Desktop installers → Artifacts**:
+
+| Platform | Artifact |
+|---|---|
+| Windows | `prism-desktop-win-x64.exe` (NSIS installer) + `.exe` portable |
+| macOS | `.dmg` + `.zip` (unsigned — right-click → Open) |
+| Linux | `.AppImage` + `.deb` |
+
+To build locally: `cd desktop && npm install && npm run dist`.
+
+> macOS: grant **Screen Recording** to Prism on first capture. Quit with `Ctrl/⌘+Shift+Q`.
 
 ## Tests
 

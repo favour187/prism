@@ -25,10 +25,15 @@ import android.util.DisplayMetrics
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.content.pm.PackageManager
+import android.Manifest
 import android.view.WindowManager
+import android.webkit.PermissionRequest
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import androidx.core.content.ContextCompat
 import android.widget.ImageView
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -238,8 +243,20 @@ class FloatingService : Service() {
             settings.domStorageEnabled = true
             settings.allowFileAccess = false
             settings.allowContentAccess = false
-            settings.mediaPlaybackRequiresUserGesture = true
+            settings.mediaPlaybackRequiresUserGesture = false
             addJavascriptInterface(PrismJsBridge(this@FloatingService), "prismAndroid")
+            webChromeClient = object : WebChromeClient() {
+                // Grant the WebView mic access for voice input once the OS permission is held.
+                override fun onPermissionRequest(request: PermissionRequest) {
+                    val wantsAudio = request.resources.any { it == PermissionRequest.RESOURCE_AUDIO_CAPTURE }
+                    val osGranted = ContextCompat.checkSelfPermission(
+                        this@FloatingService, Manifest.permission.RECORD_AUDIO,
+                    ) == PackageManager.PERMISSION_GRANTED
+                    mainHandler.post {
+                        if (wantsAudio && osGranted) request.grant(request.resources) else request.deny()
+                    }
+                }
+            }
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
                     return if (url.startsWith(serverUrl) || url.startsWith("data:") || url.startsWith("blob:")) {

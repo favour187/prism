@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, streamChat } from './api.js';
+import { speak, stopSpeaking, ttsSupported } from './voice.js';
 import Sidebar from './components/Sidebar.jsx';
 import ChatHeader from './components/ChatHeader.jsx';
 import MessageList from './components/MessageList.jsx';
@@ -23,10 +24,12 @@ export default function App() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [model, setModel] = useState(() => localStorage.getItem('prism.model') ?? '');
+  const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('prism.autospeak') !== '0');
   const [toast, setToast] = useState(null);
 
   const abortRef = useRef(null);
   const toastTimer = useRef(null);
+  const streamTextRef = useRef('');
 
   const showToast = useCallback((message, kind = 'info') => {
     clearTimeout(toastTimer.current);
@@ -136,6 +139,8 @@ export default function App() {
     if (!canSend) return;
     const trimmed = (content ?? '').trim();
     if (!trimmed && !pendingFiles.length && !pendingScreenshots.length && !pendingAction) return;
+    stopSpeaking();
+    streamTextRef.current = '';
 
     const attachmentIds = pendingFiles.map((f) => f.id);
     const screenshots = pendingScreenshots.map((s) => s.dataUrl);
@@ -188,7 +193,10 @@ export default function App() {
         }
         setStream((s) => (s ? { ...s, meta: { ...(s.meta ?? {}), ...meta } } : s));
       },
-      onDelta: (delta) => setStream((s) => (s ? { ...s, text: s.text + delta } : s)),
+      onDelta: (delta) => {
+        streamTextRef.current += delta;
+        setStream((s) => (s ? { ...s, text: s.text + delta } : s));
+      },
       onNotice: (notice) => showToast(notice, 'info'),
       onError: (err) => {
         setStream((s) => (s ? { ...s, error: err } : { text: '', meta: null, error: err }));
@@ -196,6 +204,8 @@ export default function App() {
       },
       onDone: async (done) => {
         setStream(null);
+        const finalText = streamTextRef.current;
+        streamTextRef.current = '';
         if (done?.conversationId) {
           sawMetaConvo = done.conversationId;
           try {
@@ -204,13 +214,14 @@ export default function App() {
           } catch { /* keep optimistic view */ }
         }
         refreshConversations(search);
+        if (autoSpeak && finalText && ttsSupported()) speak(finalText).catch(() => {});
       },
     });
 
     function labelOf(a) {
       return { explain: 'Explain', fix: 'Fix', improve: 'Improve', generate: 'Generate' }[a] ?? a;
     }
-  }, [canSend, pendingFiles, pendingScreenshots, pendingAction, activeId, model, showToast, refreshConversations, search]);
+  }, [canSend, pendingFiles, pendingScreenshots, pendingAction, activeId, model, showToast, refreshConversations, search, autoSpeak]);
 
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort();
@@ -283,6 +294,15 @@ export default function App() {
           model={model}
           onModelChange={setModel}
           onOpenAssistant={() => setAssistantOpen((v) => !v)}
+          speakOn={autoSpeak}
+          onToggleSpeak={() => {
+            setAutoSpeak((v) => {
+              const next = !v;
+              localStorage.setItem('prism.autospeak', next ? '1' : '0');
+              if (!next) stopSpeaking();
+              return next;
+            });
+          }}
         />
 
         {cfg && providerReady === false && (
@@ -312,6 +332,7 @@ export default function App() {
           onClearAction={() => setPendingAction(null)}
           onAction={(action) => setPendingAction({ action, selection: '' })}
           onOpenAssistant={() => setAssistantOpen(true)}
+          onToast={showToast}
         />
       </main>
 

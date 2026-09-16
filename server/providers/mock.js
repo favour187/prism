@@ -91,4 +91,15 @@ Now send a real message, attach a file, or capture your screen with \`Ctrl/⌘+S
   async listModels() {
     return ['mock/chat-demo', 'mock/vision-demo'];
   }
+
+  supportsTranscription() {
+    return true;
+  }
+
+  async transcribeAudio({ buffer }) {
+    if (!buffer || buffer.length < 10) {
+      throw new Error('Empty audio payload.');
+    }
+    return 'This is a mock transcription (AI_PROVIDER=mock) — speech-to-text flows through the real pipeline here.';
+  }
 }

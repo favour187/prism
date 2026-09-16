@@ -43,6 +43,21 @@ export class AIProvider {
   async listModels() {
     return [];
   }
+
+  /** Whether this provider offers speech-to-text. */
+  supportsTranscription() {
+    return false;
+  }
+
+  /**
+   * Transcribe audio to text (optional capability).
+   * @param {{ buffer: Buffer, mime: string, filename: string }} audio
+   * @returns {Promise<string>} transcript
+   */
+  // eslint-disable-next-line no-unused-vars
+  async transcribeAudio(audio) {
+    throw new Error('transcribeAudio not implemented');
+  }
 }
 
 export class ProviderError extends Error {

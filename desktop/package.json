@@ -1,14 +1,54 @@
 {
   "name": "prism-desktop",
   "version": "1.0.0",
-  "description": "Optional Electron shell for Prism — OS-level global shortcut + always-on-top.",
+  "description": "Prism Desktop — Arc-style floating AI screen assistant (global hotkey, captures, voice).",
   "private": true,
   "main": "main.js",
+  "author": "Prism",
+  "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "dev": "PRISM_URL=http://localhost:5173 electron ."
+    "dev": "PRISM_URL=http://localhost:5173 electron .",
+    "pack": "electron-builder --dir --publish never",
+    "dist": "electron-builder --publish never"
   },
   "devDependencies": {
-    "electron": "^33.2.0"
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "app.prism.assistant.desktop",
+    "productName": "Prism",
+    "artifactName": "prism-desktop-${os}-${arch}.${ext}",
+    "files": [
+      "main.js",
+      "preload.js",
+      "region-preload.js",
+      "region.html",
+      "build/icon.png",
+      "package.json"
+    ],
+    "directories": {
+      "output": "out"
+    },
+    "win": {
+      "target": ["nsis", "portable"],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "shortcutName": "Prism"
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.png",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "icon": "build/icon.png",
+      "category": "Utility"
+    }
   }
 }

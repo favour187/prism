@@ -41,6 +41,11 @@ router.get('/config', async (_req, res, next) => {
         maxUploadMb: config.maxUploadMb,
         maxUploadFiles: config.maxUploadFiles,
         maxScreenshots: 4,
+        maxAudioMb: config.maxAudioMb,
+      },
+      voice: {
+        stt: provider.supportsTranscription(),
+        tts: 'client', // answers are spoken by the client's speech synthesizer
       },
       privacy: {
         screenRecording: 'opt-in-per-capture',
