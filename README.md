@@ -126,14 +126,31 @@ Without a disk, everything still works — data is just ephemeral per deploy.
 | `GET /api/health` | Liveness/readiness |
 | `GET /api/privacy/export` · `DELETE /api/privacy/data` | Data export / wipe |
 
-## Desktop shell (optional)
+## Desktop app (Arc-style floating assistant)
 
-The web app is fully self-contained. For a **true OS-level global shortcut** and an always-on-top floating window, an Electron shell is included:
+The `desktop/` folder is a real Electron app — this is the experience closest to Arc's screen assistant:
+
+- **Frameless, always-on-top mini window** that floats over all your apps
+- **True global hotkey** Ctrl/⌘+Shift+A → toggles it from anywhere in the OS
+- **Direct capture** (no browser picker dialogs): whole screen, a picker of your open windows, or a **drag-select region** with a transparent snipping overlay
+- The panel hides itself while capturing so it never appears in your screenshots, then comes back
+- Answer streams in the small toggle window; pin/unpin, hide, and ⤢ opens the full chat
+- Still privacy-first: one frame per explicit click, never continuous recording
 
 ```bash
-npm --prefix desktop install
-npm --prefix desktop run dev   # loads http://localhost:5173
+cd desktop
+npm install          # downloads Electron (~100 MB)
+npm start            # uses the deployed app (https://prism-yks3.onrender.com)
+# or against your local stack:
+PRISM_URL=http://localhost:5173 npm run dev
 ```
+
+Environment knobs: `PRISM_URL`, `PRISM_SHORTCUT`, `PRISM_WIDTH`, `PRISM_HEIGHT`.
+
+The same compact UI is also available in any browser at **`/?overlay=1`** (uses the browser's native picker for captures — the Electron build skips the dialogs).
+
+> macOS: grant **Screen Recording** permission to your terminal/Electron on first capture.
+> Packaging (optional): add `electron-builder` to produce a `.dmg` / `.exe` installer.
 
 ## Tests
 

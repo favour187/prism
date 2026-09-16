@@ -94,7 +94,7 @@ const SUGGESTIONS = [
   { icon: '📎', title: 'Upload project files', body: 'Drop code files, PDFs or DOCX — I keep them as codebase context for the whole session.' },
 ];
 
-export default function MessageList({ messages, stream, onCodeAction }) {
+export default function MessageList({ messages, stream, onCodeAction, emptyHint = null }) {
   const scrollRef = useRef(null);
   const pinRef = useRef(true);
 
@@ -110,6 +110,23 @@ export default function MessageList({ messages, stream, onCodeAction }) {
   };
 
   const empty = messages.length === 0 && !stream;
+
+  if (empty && emptyHint) {
+    return (
+      <div className="chat-scroll" ref={scrollRef} onScroll={onScroll}>
+        <div className="welcome welcome-mini">
+          <div className="welcome-badge sm" aria-hidden="true">◮</div>
+          <p className="welcome-sub">{emptyHint}</p>
+          <div className="suggestions s1">
+            <div className="suggestion">
+              <div className="suggestion-title">🖥 Capture → ask</div>
+              <div className="suggestion-body">Screenshot a terminal error, UI, or docs and ask — I analyze what's on screen.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="chat-scroll" ref={scrollRef} onScroll={onScroll}>
