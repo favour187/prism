@@ -485,6 +485,7 @@ if (!gotLock) {
         'quick-ask',
       ],
       ['CommandOrControl+Shift+W', () => presentOverlay('prism:toggle-watch'), 'watch toggle'],
+      ['CommandOrControl+K', () => presentOverlay('prism:focus-bar'), 'command bar (⌘K)'],
     ]) {
       if (!globalShortcut.register(accel, fn)) {
         console.warn('[prism-desktop] could not register', accel, `(${label})`);

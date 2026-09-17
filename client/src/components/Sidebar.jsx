@@ -12,6 +12,32 @@ function timeAgo(ts) {
   return new Date(ts).toLocaleDateString();
 }
 
+/** Arc-style grouping: Today / Yesterday / Previous 7 days / Earlier. */
+function groupLabel(ts) {
+  const now = new Date();
+  const startOfDay = (dt) => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+  const day = Math.floor((startOfDay(now) - startOfDay(new Date(ts))) / 86_400_000);
+  if (day <= 0) return 'Today';
+  if (day === 1) return 'Yesterday';
+  if (day < 7) return 'Previous 7 days';
+  return 'Earlier';
+}
+
+/** Group conversations by bucket while preserving API order (already newest-first). */
+function groupConversations(items) {
+  const groups = [];
+  let current = null;
+  for (const c of items) {
+    const label = groupLabel(c.updatedAt);
+    if (!current || current.label !== label) {
+      current = { label, items: [] };
+      groups.push(current);
+    }
+    current.items.push(c);
+  }
+  return groups;
+}
+
 export default function Sidebar({
   conversations,
   activeId,
@@ -52,14 +78,14 @@ export default function Sidebar({
               </span>
             )}
           </div>
-          <button className="btn new-chat" onClick={onNew} title="New conversation">
+          <button className="btn new-chat" onClick={onNew} title="New conversation (Ctrl/⌘+N)">
             <span aria-hidden="true">＋</span> New chat
           </button>
           <div className="search-wrap">
             <input
               className="search"
               type="search"
-              placeholder="Search conversations…"
+              placeholder="Search conversations…  (⌘K)"
               value={search}
               onChange={(e) => onSearch(e.target.value)}
               aria-label="Search conversations"
@@ -73,63 +99,68 @@ export default function Sidebar({
               {search ? 'No conversations match your search.' : 'No conversations yet — start chatting!'}
             </p>
           )}
-          {conversations.map((c) => (
-            <div
-              key={c.id}
-              role="listitem"
-              className={`convo-item ${c.id === activeId ? 'active' : ''}`}
-              onClick={() => onSelect(c.id)}
-            >
-              {editing === c.id ? (
-                <input
-                  className="rename-input"
-                  value={draft}
-                  autoFocus
-                  onChange={(e) => setDraft(e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') commitRename(c.id);
-                    if (e.key === 'Escape') setEditing(null);
-                  }}
-                  onBlur={() => commitRename(c.id)}
-                />
-              ) : (
-                <>
-                  <div className="convo-main">
-                    <span className="convo-title">{c.title}</span>
-                    <span className="convo-time">{timeAgo(c.updatedAt)}</span>
-                  </div>
-                  <div className="convo-actions">
-                    <button
-                      className="icon-btn"
-                      title="Rename"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditing(c.id);
-                        setDraft(c.title);
+          {groupConversations(conversations).map((group) => (
+            <div className="convo-group" key={group.label}>
+              <div className="convo-group-label">{group.label}</div>
+              {group.items.map((c) => (
+                <div
+                  key={c.id}
+                  role="listitem"
+                  className={`convo-item ${c.id === activeId ? 'active' : ''}`}
+                  onClick={() => onSelect(c.id)}
+                >
+                  {editing === c.id ? (
+                    <input
+                      className="rename-input"
+                      value={draft}
+                      autoFocus
+                      onChange={(e) => setDraft(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') commitRename(c.id);
+                        if (e.key === 'Escape') setEditing(null);
                       }}
-                    >
-                      ✎
-                    </button>
-                    <button
-                      className="icon-btn danger"
-                      title="Delete"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm(`Delete “${c.title}”? This cannot be undone.`)) onDelete(c.id);
-                      }}
-                    >
-                      🗑
-                    </button>
-                  </div>
-                </>
-              )}
+                      onBlur={() => commitRename(c.id)}
+                    />
+                  ) : (
+                    <>
+                      <div className="convo-main">
+                        <span className="convo-title">{c.title}</span>
+                        <span className="convo-time">{timeAgo(c.updatedAt)}</span>
+                      </div>
+                      <div className="convo-actions">
+                        <button
+                          className="icon-btn"
+                          title="Rename"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditing(c.id);
+                            setDraft(c.title);
+                          }}
+                        >
+                          ✎
+                        </button>
+                        <button
+                          className="icon-btn danger"
+                          title="Delete"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Delete “${c.title}”? This cannot be undone.`)) onDelete(c.id);
+                          }}
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
             </div>
           ))}
         </nav>
 
         <div className="sidebar-bottom">
-          <button className="btn ghost" onClick={onOpenSettings}>
+          <button className="btn ghost" onClick={onOpenSettings} title="Settings (⌘,)">
             ⚙ Settings &amp; privacy
           </button>
         </div>

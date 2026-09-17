@@ -66,6 +66,9 @@ export default function OverlayApp() {
   const streamTextRef = useRef('');
   const watcherRef = useRef(null);
   const streamRef = useRef(null);
+  const inputRef = useRef(null);
+  const textRef = useRef(text);
+  textRef.current = text;
   const narrateRef = useRef(narrate);
   narrateRef.current = narrate;
 
@@ -404,7 +407,11 @@ export default function OverlayApp() {
     if (!desktop) return undefined;
     const un1 = desktop.onToggleWatch?.(() => toggleWatchRef.current());
     const un2 = desktop.onQuickAsk?.((t) => quickAskRef.current(t));
-    return () => { un1?.(); un2?.(); };
+    const un3 = desktop.onFocusBar?.(() => {
+      inputRef.current?.focus();
+      if (textRef.current?.startsWith('/')) setText('');
+    });
+    return () => { un1?.(); un2?.(); un3?.(); };
   }, []);
 
   // ---------------------------- command palette ------------------------------
@@ -738,6 +745,7 @@ export default function OverlayApp() {
           )}
           {mic === 'recording' && <span className="ov-rec">listening… tap ⏺ to stop</span>}
           <input
+            ref={inputRef}
             className="ov-input"
             placeholder={shots.length ? 'Ask about the capture… ( / for commands )' : 'Ask anything · / for commands · type text to rewrite it'}
             value={text}

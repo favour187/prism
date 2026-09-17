@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, streamChat } from './api.js';
+import { api, streamChat, regenerateChat } from './api.js';
 import { speak, stopSpeaking, ttsSupported } from './voice.js';
 import Sidebar from './components/Sidebar.jsx';
 import ChatHeader from './components/ChatHeader.jsx';
@@ -234,6 +234,46 @@ export default function App() {
     setStream((s) => (s && s.text ? { ...s, error: { code: 'STOPPED', message: 'Generation stopped.' } } : null));
   }, []);
 
+  /** Regenerate the most recent assistant reply. */
+  const regenerateMessage = useCallback((msg) => {
+    if (stream) return;
+    if (!activeId && !msg?.id) return;
+    stopSpeaking();
+    streamTextRef.current = '';
+    // Optimistically drop the last assistant reply; it is replaced on done.
+    setMessages((prev) => {
+      const idx = prev.map((m) => m.role).lastIndexOf('assistant');
+      if (idx === -1) return prev;
+      return [...prev.slice(0, idx), ...prev.slice(idx + 1)];
+    });
+    setStream({ text: '', meta: null, error: null });
+    abortRef.current = regenerateChat(activeId, {
+      onMeta: (meta) => setStream((s) => (s ? { ...s, meta: { ...(s.meta ?? {}), ...meta } } : s)),
+      onDelta: (delta) => {
+        streamTextRef.current += delta;
+        setStream((s) => (s ? { ...s, text: s.text + delta } : s));
+      },
+      onNotice: (notice) => showToast(notice, 'info'),
+      onError: (err) => {
+        setStream((s) => (s ? { ...s, error: err } : { text: '', meta: null, error: err }));
+        showToast(err.message, 'error');
+      },
+      onDone: async (done) => {
+        setStream(null);
+        const finalText = streamTextRef.current;
+        streamTextRef.current = '';
+        if (done?.conversationId) {
+          try {
+            const data = await api.getConversation(done.conversationId);
+            setMessages(data.messages);
+          } catch { /* keep optimistic view */ }
+        }
+        refreshConversations(search);
+        if (autoSpeak && finalText && ttsSupported()) speak(finalText).catch(() => {});
+      },
+    }, model || null);
+  }, [stream, activeId, model, showToast, refreshConversations, search, autoSpeak]);
+
   // Code-block quick actions → compose an action turn
   const onCodeAction = useCallback((action, code) => {
     setPendingAction({ action, selection: code });
@@ -305,21 +345,58 @@ export default function App() {
     showToast('Screenshot attached — preview is in the composer.', 'success');
   }, [showToast]);
 
-  // Global shortcut: Ctrl/Cmd+Shift+A toggles the screen assistant.
+  // Global shortcuts: Ctrl/Cmd+Shift+A toggles the screen assistant, plus
+  // Arc-style keys (Cmd+K palette, Cmd+N new chat, Cmd+J sidebar) for everyone.
   useEffect(() => {
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
         e.preventDefault();
         setAssistantOpen((v) => !v);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        const key = e.key.toLowerCase();
+        if (key === 'k') {
+          e.preventDefault();
+          setSidebarOpen(true);
+          const search = document.querySelector('.search');
+          search?.focus();
+          return;
+        }
+        if (key === 'n') {
+          e.preventDefault();
+          newConversation();
+          return;
+        }
+        if (key === 'j') {
+          e.preventDefault();
+          setSidebarOpen((v) => !v);
+          return;
+        }
+        if (key === ',') {
+          e.preventDefault();
+          setSettingsOpen(true);
+          return;
+        }
       }
       if (e.key === 'Escape') {
         setAssistantOpen(false);
         setSettingsOpen(false);
       }
+      // Arc-style: focus the composer quickly with Tab (unless already typing).
+      if (e.key === 'Tab' && view === 'chat') {
+        const active = document.activeElement;
+        const typing = active && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT' || active.tagName === 'SELECT');
+        const ta = document.querySelector('.composer textarea');
+        if (ta && active !== ta && !typing) {
+          e.preventDefault();
+          ta.focus();
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [newConversation, view]);
 
   const providerReady = cfg?.provider?.ready;
   const activeTitle = useMemo(
@@ -394,6 +471,7 @@ export default function App() {
               messages={messages}
               stream={stream}
               onCodeAction={onCodeAction}
+              onRegenerate={activeId ? regenerateMessage : null}
             />
 
             <Composer

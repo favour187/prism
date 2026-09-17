@@ -1,11 +1,24 @@
-import { memo, useEffect, useRef } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { memo, useEffect, useRef, useState } from 'react';import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import CodeBlock, { InlineCode } from './CodeBlock.jsx';
 
 const rehypePlugins = [[rehypeHighlight, { detect: false, ignoreMissing: true }]];
 const remarkPlugins = [remarkGfm];
+
+/** Compact relative time for message meta (Arc-style "3m ago"). */
+function timeAgo(ts) {
+  if (!ts) return '';
+  const s = Math.max(1, Math.floor((Date.now() - ts) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  return new Date(ts).toLocaleDateString();
+}
 
 function Markdown({ text, onCodeAction }) {
   return (
@@ -33,18 +46,52 @@ function Markdown({ text, onCodeAction }) {
   );
 }
 
-const Message = memo(function Message({ msg, onCodeAction }) {
+const Message = memo(function Message({ msg, onCodeAction, onCopy, onRegenerate }) {
   const isUser = msg.role === 'user';
   const vision = msg.meta?.vision;
+  const [copied, setCopied] = useState(false);
+
+  const copyMessage = async () => {
+    try {
+      await navigator.clipboard.writeText(msg.content);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = msg.content;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
+  };
+
   return (
     <article className={`msg ${isUser ? 'msg-user' : 'msg-assistant'}`}>
       <div className="msg-avatar" aria-hidden="true">{isUser ? '🧑‍💻' : '◮'}</div>
       <div className="msg-body">
         <div className="msg-meta">
           <span className="msg-role">{isUser ? 'You' : 'Prism'}</span>
+          {(msg.createdAt || msg.created_at) && (
+            <span className="msg-time">{timeAgo(msg.createdAt ?? msg.created_at)}</span>
+          )}
           {!isUser && msg.meta?.model && <span className="msg-model">{msg.meta.model}</span>}
           {!isUser && vision === 'vision' && <span className="msg-badge vision" title="Answered by the vision model">👁 vision</span>}
           {!isUser && vision === 'ocr' && <span className="msg-badge ocr" title="Vision model fell back to OCR text extraction">⌗ OCR fallback</span>}
+          {!isUser && (
+            <span className="msg-actions">
+              <button className="msg-action" title="Copy this answer" onClick={copyMessage}>
+                {copied ? '✓ Copied' : '⧉ Copy'}
+              </button>
+              {onRegenerate && (
+                <button className="msg-action" title="Regenerate this answer" onClick={() => onRegenerate(msg)}>
+                  ↻ Regenerate
+                </button>
+              )}
+            </span>
+          )}
         </div>
         <div className="msg-content markdown">
           <Markdown text={msg.content} onCodeAction={isUser ? null : onCodeAction} />
@@ -94,7 +141,7 @@ const SUGGESTIONS = [
   { icon: '📎', title: 'Upload project files', body: 'Drop code files, PDFs or DOCX — I keep them as codebase context for the whole session.' },
 ];
 
-export default function MessageList({ messages, stream, onCodeAction, emptyHint = null }) {
+export default function MessageList({ messages, stream, onCodeAction, onRegenerate = null, emptyHint = null }) {
   const scrollRef = useRef(null);
   const pinRef = useRef(true);
 
@@ -149,9 +196,18 @@ export default function MessageList({ messages, stream, onCodeAction, emptyHint 
         </div>
       ) : (
         <div className="msg-list">
-          {messages.map((m) => (
-            <Message key={m.id} msg={m} onCodeAction={onCodeAction} />
-          ))}
+          {messages.map((m, i) => {
+            const isLastAssistant =
+              m.role === 'assistant' && i === messages.length - 1;
+            return (
+              <Message
+                key={m.id}
+                msg={m}
+                onCodeAction={onCodeAction}
+                onRegenerate={isLastAssistant ? onRegenerate : null}
+              />
+            );
+          })}
           {stream && <StreamingMessage stream={stream} onCodeAction={onCodeAction} />}
         </div>
       )}

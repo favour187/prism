@@ -13,6 +13,7 @@ import uploadsRouter from './routes/uploads.js';
 import voiceRouter from './routes/voice.js';
 import systemRouter from './routes/system.js';
 import { getProvider } from './providers/index.js';
+import store from './memory/store.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -77,7 +78,7 @@ if (fs.existsSync(config.clientDist)) {
 app.use(errorHandler);
 
 const provider = getProvider();
-app.listen(config.port, config.host, () => {
+const server = app.listen(config.port, config.host, () => {
   console.log(`[prism] server listening on http://${config.host}:${config.port}`);
   console.log(
     `[prism] provider=${provider.id} ready=${provider.isReady()} chatModel=${config.featherless.chatModel}`,
@@ -86,3 +87,24 @@ app.listen(config.port, config.host, () => {
     console.warn(`[prism] WARNING: ${provider.notReadyReason()} Chat calls will return 503 until configured.`);
   }
 });
+
+// Graceful shutdown: stop accepting connections, drain, then close SQLite cleanly
+// so renders/restarts never see a dirty WAL or half-written rows.
+function shutdown(signal) {
+  console.log(`[prism] ${signal} received — shutting down gracefully.`);
+  server.close(() => {
+    try {
+      // better-sqlite3 closes on process exit, but an explicit close flushes WAL.
+      // store exposes the underlying db via a dedicated closer to avoid deep imports.
+      store.close?.();
+    } catch {
+      /* already closed or not exposed */
+    }
+    process.exit(0);
+  });
+  // Hard deadline in case a connection refuses to drain.
+  setTimeout(() => process.exit(0), 5000).unref();
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

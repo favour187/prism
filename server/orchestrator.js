@@ -77,12 +77,14 @@ export async function* runChatTurn({
   selection = '',
   model = null,
   signal,
+  skip_persist = false,
 }) {
   const provider = getProvider();
 
   // ---- validation ------------------------------------------------------------
   const content = String(rawContent ?? '').slice(0, 64_000).trim();
-  if (!content && !screenshots.length && !attachmentIds.length && !action) {
+  const hasAnything = Boolean(content) || screenshots.length > 0 || attachmentIds.length > 0 || Boolean(action) || skip_persist;
+  if (!hasAnything) {
     throw new OrchestratorError('Message is empty.', 'EMPTY_MESSAGE', 400);
   }
   if (screenshots.length > 4) throw new OrchestratorError('At most 4 screenshots per message.', 'TOO_MANY_IMAGES', 400);
@@ -141,6 +143,9 @@ export async function* runChatTurn({
     { role: 'system', content: SYSTEM_PROMPT },
     ...history.map((h) => ({ role: h.role, content: h.content })),
   ];
+  // Regenerate (skip_persist) replays history with NO new user turn: the client
+  // deletes the last assistant reply first, so the window already ends in the
+  // user question we are answering again.
   const userTurn =
     images.length > 0
       ? {
@@ -151,23 +156,27 @@ export async function* runChatTurn({
           ],
         }
       : { role: 'user', content: userText };
-  messages.push(userTurn);
+  if (!skip_persist) messages.push(userTurn);
 
   // ---- persist the user's message (display form, not the prompt form) -----------
+  // Skipped when regenerating: we replay the previous, already-saved turn instead.
   const displayContent =
     [content || (action ? `${toolsLabel(action)}${selection ? ' selected code' : ''}` : ''),
       screenshots.length ? `📷 ${screenshots.length} screenshot(s) captured` : '',
       attachments.length ? `📎 ${attachments.map((a) => a.name).join(', ')}` : '']
       .filter(Boolean)
       .join('\n\n') || userText.slice(0, 2000);
-  const userMessageId = store.addMessage({
-    conversationId: cid,
-    role: 'user',
-    content: displayContent,
-    attachments: attachmentIds,
-    meta: { action: action ?? null, hasScreenshots: screenshots.length > 0 },
-  });
-  store.attachToConversation(cid, attachmentIds);
+  let userMessageId = null;
+  if (!skip_persist) {
+    userMessageId = store.addMessage({
+      conversationId: cid,
+      role: 'user',
+      content: displayContent,
+      attachments: attachmentIds,
+      meta: { action: action ?? null, hasScreenshots: screenshots.length > 0 },
+    });
+    store.attachToConversation(cid, attachmentIds);
+  }
 
   // ---- pick model: vision route when images are present --------------------------
   const chatModel = model || config.featherless.chatModel;
@@ -258,7 +267,7 @@ export async function* runChatTurn({
 
   const convo = store.getConversation(cid);
   let title = convo?.title;
-  if (convo && convo.title === 'New conversation') {
+  if (!skip_persist && convo && convo.title === 'New conversation') {
     title = await autoTitle(provider, chatModel, userText, signal).catch(() => null);
     if (!title) title = titleFromText(content || userText);
     store.renameConversation(cid, title);

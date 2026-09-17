@@ -48,6 +48,13 @@ contextBridge.exposeInMainWorld('prismDesktop', {
     return () => ipcRenderer.removeListener('prism:toggle-watch', listener);
   },
 
+  /** ⌘K global command bar → focus the overlay input; cb(). Returns unsubscribe fn. */
+  onFocusBar: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on('prism:focus-bar', listener);
+    return () => ipcRenderer.removeListener('prism:focus-bar', listener);
+  },
+
   // ---- inline Write bar (⌘⇧R window) ----
   /** Text that was selected in the source app when the bar opened. */
   writeGetSelection: () => ipcRenderer.invoke('prism:write-selection'),

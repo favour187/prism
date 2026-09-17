@@ -128,6 +128,7 @@ Without a disk, everything still works — data is just ephemeral per deploy.
 | Route | Description |
 |---|---|
 | `POST /api/chat` | Streaming chat turn (SSE events: `meta` / `delta` / `notice` / `done` / `error`) — supports `attachmentIds`, `screenshots` (data URLs), `action` + `selection`, `model` |
+| `POST /api/chat/regenerate` | Re-answer the last user question in a conversation — deletes the previous assistant reply and re-streams. Body: `{ conversationId, model? }` |
 | `GET /api/conversations?query=` | List / search conversations |
 | `POST /api/conversations` · `GET/PATCH/DELETE /api/conversations/:id` | CRUD + history |
 | `POST /api/uploads` | Validated multipart uploads; text extraction; image normalization |
@@ -216,3 +217,30 @@ prism/
 
 - The `mock` provider exists **only** for keyless local development/CI (`AI_PROVIDER=mock`) and is visibly badged in the UI. Production uses Featherless.
 - Models are user-selectable per-chat in the header; defaults come from env. Pick whichever chat/vision models your Featherless account exposes.
+- **Server model list is cached** for 10 minutes per process, so repeated `/api/config` hits (web app + overlay + Android + desktop) don't re-list from the provider.
+
+## Keyboard shortcuts (Arc-style)
+
+| Shortcut | Where | Action |
+|---|---|---|
+| `Ctrl/⌘+Shift+A` | web + desktop global | Toggle the screen assistant / floating panel |
+| `Ctrl/⌘+K` | web + desktop global | Command bar — focus search / overlay input |
+| `Ctrl/⌘+N` | web | New conversation |
+| `Ctrl/⌘+J` | web | Toggle the sidebar |
+| `Ctrl/⌘+,` | web | Settings |
+| `Ctrl/⌘+Shift+R` | desktop global | Rewrite the selected text in any app (inline write bar) |
+| `Ctrl/⌘+Shift+G` | desktop global | Ask about the selected text |
+| `Ctrl/⌘+Shift+W` | desktop global | Toggle Watch mode |
+| `Ctrl/⌘+Shift+Q` | desktop | Quit |
+
+## Quality: local build & test
+
+```bash
+npm run build   # client (Vite) → client/dist
+npm test        # 44 end-to-end checks (mock provider)
+```
+
+## Deployment notes
+
+- `node`: **20.x** (see `.nvmrc`)
+

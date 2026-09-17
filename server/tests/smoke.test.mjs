@@ -44,7 +44,16 @@ async function waitForServer(timeoutMs = 30000) {
 
 /** Consume the SSE stream of POST /api/chat and collect typed events. */
 async function chatStream(payload) {
-  const res = await fetch(`${BASE}/api/chat`, {
+  return sseCollect(`${BASE}/api/chat`, payload);
+}
+
+/** Same collector, pointed at POST /api/chat/regenerate. */
+async function regenStream(payload) {
+  return sseCollect(`${BASE}/api/chat/regenerate`, payload);
+}
+
+async function sseCollect(url, payload) {
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -165,6 +174,21 @@ async function main() {
     assert(s5.done && !s5.errors.length, 'Fix action with selected code completes');
     const s6 = await chatStream({ conversationId: cid, action: 'bogus' });
     assert(s6.errors.some((e) => e.code === 'UNKNOWN_ACTION'), 'unknown action rejected cleanly');
+
+    // ---- regenerate ----
+    console.log('• regenerate');
+    const before = await (await fetch(`${BASE}/api/conversations/${cid}`)).json();
+    const assistantCount = before.messages.filter((m) => m.role === 'assistant').length;
+    const reg = await regenStream({ conversationId: cid });
+    assert(reg.status === 200 && reg.done && !reg.errors.length, 'regenerate streams a fresh reply');
+    assert(reg.deltas.join('').length > 50, 'regenerate reply has content');
+    const after = await (await fetch(`${BASE}/api/conversations/${cid}`)).json();
+    assert(
+      after.messages.filter((m) => m.role === 'assistant').length === assistantCount,
+      'regenerate replaced (did not duplicate) the last assistant reply',
+    );
+    const regNone = await regenStream({ conversationId: 'missing-id' });
+    assert(regNone.errors.some((e) => e.code === 'NOT_FOUND') || regNone.status === 404, 'regenerate for a missing conversation is a 404');
 
     // ---- search ----
     console.log('• conversation search');

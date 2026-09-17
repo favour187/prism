@@ -64,14 +64,17 @@ export const api = {
  * Stream a chat turn over SSE. Handlers receive typed events:
  *   onMeta(meta) onDelta(deltaText) onNotice(text) onError({code,message}) onDone(done)
  * Returns an AbortController so the UI can cancel.
+ * @param {object} payload  JSON body
+ * @param {object} handlers typed event callbacks
+ * @param {string} path  endpoint, default '/api/chat'
  */
-export function streamChat(payload, handlers = {}) {
+export function streamChat(payload, handlers = {}, path = '/api/chat') {
   const controller = new AbortController();
 
   (async () => {
     let res;
     try {
-      res = await fetch('/api/chat', {
+      res = await fetch(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
         body: JSON.stringify(payload),
@@ -144,4 +147,12 @@ export function streamChat(payload, handlers = {}) {
   })();
 
   return controller;
+}
+
+/**
+ * Regenerate the most recent assistant reply in a conversation.
+ * Same handler shape as streamChat; hits POST /api/chat/regenerate.
+ */
+export function regenerateChat(conversationId, handlers = {}, model = null) {
+  return streamChat({ conversationId, model: model || null }, handlers, '/api/chat/regenerate');
 }

@@ -127,6 +127,36 @@ export const store = {
     return rows.map((m) => ({ role: m.role, content: m.content }));
   },
 
+  getLastMessage(conversationId, role = null) {
+    const row = role
+      ? db
+          .prepare(
+            `SELECT * FROM messages WHERE conversation_id = ? AND role = ?
+             ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+          )
+          .get(conversationId, role)
+      : db
+          .prepare(
+            'SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1',
+          )
+          .get(conversationId);
+    if (!row) return null;
+    return { ...row, attachments: safeJson(row.attachments, []), meta: safeJson(row.meta, {}) };
+  },
+
+  /** Remove the most recent assistant reply (used by Regenerate). Returns the deleted row or null. */
+  deleteLastAssistantMessage(conversationId) {
+    const row = db
+      .prepare(
+        "SELECT id FROM messages WHERE conversation_id = ? AND role = 'assistant' ORDER BY created_at DESC, rowid DESC LIMIT 1",
+      )
+      .get(conversationId);
+    if (!row) return null;
+    db.prepare('DELETE FROM messages WHERE id = ?').run(row.id);
+    this.touchConversation(conversationId);
+    return row;
+  },
+
   // -------------------------------- attachments -------------------------------
   addAttachment({ conversationId = null, name, mime, kind, size, filePath, extractedText = null, truncated = 0 }) {
     const aid = id();
@@ -199,6 +229,16 @@ export const store = {
     const paths = db.prepare("SELECT path FROM attachments WHERE path != ''").all();
     db.exec('DELETE FROM messages; DELETE FROM attachments; DELETE FROM conversations;');
     for (const p of paths) fs.rm(p.path, { force: true }, () => {});
+  },
+
+  /** Flush and close the SQLite database (used on graceful shutdown). */
+  close() {
+    try {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+      db.close();
+    } catch {
+      /* already closed */
+    }
   },
 };
 

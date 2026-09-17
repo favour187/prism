@@ -6,6 +6,19 @@ import { listTools } from '../tools/codeActions.js';
 
 const router = Router();
 
+// Model lists change rarely; cache them briefly so every open of the web app,
+// overlay panel, Android WebView, and desktop surface doesn't hit the provider.
+let modelsCache = { at: 0, models: [] };
+const MODELS_CACHE_TTL_MS = 10 * 60 * 1000;
+
+async function cachedModels(provider) {
+  if (provider.id === 'mock' || !provider.isReady()) return [];
+  if (Date.now() - modelsCache.at < MODELS_CACHE_TTL_MS) return modelsCache.models;
+  const models = await provider.listModels().catch(() => []);
+  modelsCache = { at: Date.now(), models };
+  return models;
+}
+
 /** Liveness + readiness for health checks (Render, uptime monitors). */
 router.get('/health', (_req, res) => {
   const provider = getProvider();
@@ -24,10 +37,7 @@ router.get('/health', (_req, res) => {
 router.get('/config', async (_req, res, next) => {
   try {
     const provider = getProvider();
-    let models = [];
-    if (provider.isReady() && provider.id !== 'mock') {
-      models = await provider.listModels().catch(() => []);
-    }
+    let models = await cachedModels(provider);
     res.json({
       app: { name: 'Prism', version: '1.0.0' },
       provider: { id: provider.id, ready: provider.isReady(), reason: provider.isReady() ? null : provider.notReadyReason() },
