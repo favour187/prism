@@ -31,6 +31,10 @@ jobs:
       - name: Grant wrapper permission
         run: chmod +x android/gradlew
 
+      - name: Run unit tests
+        working-directory: android
+        run: ./gradlew testDebugUnitTest --stacktrace --no-daemon
+
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --stacktrace --no-daemon

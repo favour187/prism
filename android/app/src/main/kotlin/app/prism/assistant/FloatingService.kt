@@ -57,6 +57,10 @@ class FloatingService : Service() {
         private const val NOTIF_ID = 101
         private const val CHANNEL_ID = "prism"
         private const val CAPTURE_TIMEOUT_MS = 9_000L
+
+        @Volatile
+        var isRunning: Boolean = false
+            private set
     }
 
     private lateinit var wm: WindowManager
@@ -86,6 +90,7 @@ class FloatingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         createChannel()
@@ -117,6 +122,7 @@ class FloatingService : Service() {
     }
 
     override fun onDestroy() {
+        isRunning = false
         teardownCapture()
         removeViews()
         webView?.destroy()
@@ -168,7 +174,6 @@ class FloatingService : Service() {
             .addAction(0, "Stop", stop)
             .build()
     }
-
 
     @SuppressLint("ClickableViewAccessibility")
     private fun ensureHandle() {
@@ -231,7 +236,6 @@ class FloatingService : Service() {
         handle = view
     }
 
-
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     private fun ensurePanel() {
         if (panel != null) return
@@ -240,9 +244,12 @@ class FloatingService : Service() {
         val wv = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            settings.databaseEnabled = true
             settings.allowFileAccess = false
             settings.allowContentAccess = false
             settings.mediaPlaybackRequiresUserGesture = false
+            settings.useWideViewPort = true
+            settings.loadWithOverviewMode = true
             addJavascriptInterface(PrismJsBridge(this@FloatingService), "prismAndroid")
             webChromeClient = object : WebChromeClient() {
                 override fun onPermissionRequest(request: PermissionRequest) {
@@ -312,7 +319,6 @@ class FloatingService : Service() {
     }
 
     fun hidePanelForCapture() = showPanel(false)
-
 
     fun requestCapture(kind: String, token: String) {
         mainHandler.post {
@@ -439,7 +445,6 @@ class FloatingService : Service() {
         panelVisible = false
     }
 
-
     @Suppress("DEPRECATION")
     private fun displaySize(withDpi: Boolean = false): Triple<Int, Int, Int> {
         return if (Build.VERSION.SDK_INT >= 30) {
@@ -479,4 +484,12 @@ class PrismJsBridge(private val service: FloatingService) {
 
     @android.webkit.JavascriptInterface
     fun hidePanel() = service.showPanel(false)
+
+    @android.webkit.JavascriptInterface
+    fun isEdgeRunning(): Boolean = FloatingService.isRunning
+
+    @android.webkit.JavascriptInterface
+    fun stopEdge() {
+        service.stopSelf()
+    }
 }

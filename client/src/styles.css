@@ -870,3 +870,28 @@ body { letter-spacing: 0.1px; }
 .composer-palette, .composer-chips, .composer-bar-actions {
   margin: 0 auto; max-width: 780px; width: 100%;
 }
+
+
+.msg-error-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.retry-btn {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.retry-btn:hover {
+  background: var(--surface-3);
+  color: var(--text-bright);
+}

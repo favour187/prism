@@ -1,8 +1,8 @@
 package app.prism.assistant
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -10,165 +10,195 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.view.Gravity
 import android.view.View
-import android.widget.Button
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.TextView
+import android.view.ViewGroup
+import android.webkit.PermissionRequest
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
 class MainActivity : Activity() {
 
-    private lateinit var overlayBtn: Button
-    private lateinit var statusText: TextView
-    private lateinit var spinnerRow: LinearLayout
-    private lateinit var serverField: EditText
-    private lateinit var saveBtn: Button
+    private lateinit var container: FrameLayout
+    private var webView: WebView? = null
 
     private val prefs by lazy { getSharedPreferences("prism", MODE_PRIVATE) }
 
+    private val serverUrl: String
+        get() = prefs.getString("server", FloatingService.DEFAULT_SERVER) ?: FloatingService.DEFAULT_SERVER
+
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val accent = Color.parseColor("#7C6CFF")
-        val dim = Color.parseColor("#9AA3B8")
-        val fieldBg = Color.parseColor("#1C2130")
-
-        fun TextView.sub(size: Float = 13f, color: Int = dim) = apply {
-            setTextColor(color)
-            textSize = size
-        }
-
-        val pad = dp(24)
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(pad, dp(56), pad, pad)
+        container = FrameLayout(this).apply {
             setBackgroundColor(Color.parseColor("#0E1016"))
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
         }
+        setContentView(container)
 
-        root.addView(TextView(this).apply {
-            text = "◮  Prism"
-            setTextColor(Color.WHITE)
-            textSize = 30f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-        })
-        root.addView(TextView(this).sub(14f).apply {
-            text = "Chat-first screen assistant. Prism opens straight into its answer panel; a thin line sits at the screen edge so you can reopen it anytime. Tap a capture button and answers arrive in seconds — one frame per tap, never recorded."
-            setPadding(0, dp(10), 0, dp(18))
-            setLineSpacing(0f, 1.22f)
-        })
+        initWebView()
+        requestAppPermissions()
+    }
 
-        root.addView(TextView(this).sub(12f, Color.WHITE).apply { text = "Status" })
-        statusText = TextView(this).sub(13f).apply {
-            text = "Checking…"
-            setPadding(0, dp(6), 0, dp(2))
-        }
-        root.addView(statusText)
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun initWebView() {
+        if (webView != null) return
 
-        val spinner = ProgressBar(this).apply {
-            indeterminateTintList = android.content.res.ColorStateList.valueOf(accent)
-        }
-        spinnerRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(4), 0, dp(4))
-        }
-        spinnerRow.addView(spinner, LinearLayout.LayoutParams(dp(18), dp(18)).apply { rightMargin = dp(10) })
-        spinnerRow.addView(TextView(this).sub(13f).apply { text = "Waking the assistant…" })
-        root.addView(spinnerRow, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4) })
-
-        overlayBtn = Button(this).apply {
-            text = "Allow “display over other apps”"
-            setBackgroundColor(fieldBg)
-            setTextColor(Color.WHITE)
-        }
-        overlayBtn.setOnClickListener {
-            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-        }
-        root.addView(overlayBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12); bottomMargin = dp(6) })
-
-        root.addView(TextView(this).sub(12f, Color.WHITE).apply { text = "Prism server" })
-        serverField = EditText(this).apply {
-            setText(prefs.getString("server", FloatingService.DEFAULT_SERVER))
-            setSingleLine()
-            setTextColor(Color.WHITE)
-            setHintTextColor(dim)
-            setPadding(dp(12), 0, dp(12), 0)
-            setBackgroundColor(fieldBg)
-            inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
-        }
-        root.addView(serverField, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply { topMargin = dp(6); bottomMargin = dp(8) })
-
-        saveBtn = Button(this).apply {
-            text = "Save server"
-            setBackgroundColor(accent)
-            setTextColor(Color.WHITE)
-        }
-        saveBtn.setOnClickListener {
-            val url = serverField.text.toString().trim().removeSuffix("/")
-            if (!url.startsWith("http")) {
-                Toast.makeText(this, "Enter a valid server URL", Toast.LENGTH_LONG).show()
-            } else {
-                prefs.edit().putString("server", url).apply()
-                Toast.makeText(this, "Server saved — reopening assistant", Toast.LENGTH_SHORT).show()
-                launchAssistant()
+        val wv = WebView(this).apply {
+            setBackgroundColor(Color.parseColor("#0E1016"))
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                allowFileAccess = false
+                allowContentAccess = false
+                mediaPlaybackRequiresUserGesture = false
+                cacheMode = WebSettings.LOAD_DEFAULT
+                useWideViewPort = true
+                loadWithOverviewMode = true
+                textZoom = 100
             }
+
+            addJavascriptInterface(MainAppJsBridge(this@MainActivity), "prismAndroid")
+
+            webChromeClient = object : WebChromeClient() {
+                override fun onPermissionRequest(request: PermissionRequest) {
+                    val wantsAudio = request.resources.any { it == PermissionRequest.RESOURCE_AUDIO_CAPTURE }
+                    val osGranted = ContextCompat.checkSelfPermission(
+                        this@MainActivity,
+                        Manifest.permission.RECORD_AUDIO,
+                    ) == PackageManager.PERMISSION_GRANTED
+
+                    runOnUiThread {
+                        if (wantsAudio && osGranted) {
+                            request.grant(request.resources)
+                        } else if (wantsAudio && !osGranted) {
+                            ActivityCompat.requestPermissions(
+                                this@MainActivity,
+                                arrayOf(Manifest.permission.RECORD_AUDIO),
+                                101,
+                            )
+                            request.deny()
+                        } else {
+                            request.deny()
+                        }
+                    }
+                }
+            }
+
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
+                    return if (url.startsWith(serverUrl) || url.startsWith("data:") || url.startsWith("blob:") || url.startsWith("about:")) {
+                        false
+                    } else {
+                        runCatching {
+                            view.context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+                        true
+                    }
+                }
+            }
+
+            loadUrl("$serverUrl/?android=1")
         }
-        root.addView(saveBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(16) })
 
-        root.addView(TextView(this).sub(11.5f).apply {
-            text = "Privacy: the screen is captured only when YOU tap a capture button — one frame, immediately processed. The thin edge line stays quiet until tapped; nothing is monitored or recorded in the background."
-            setLineSpacing(0f, 1.25f)
-        })
+        webView = wv
+        container.addView(
+            wv,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+    }
 
-        setContentView(root)
-
-        val needed = mutableListOf(Manifest.permission.RECORD_AUDIO)
-        if (Build.VERSION.SDK_INT >= 33) needed.add(Manifest.permission.POST_NOTIFICATIONS)
-        val missing = needed.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+    private fun requestAppPermissions() {
+        val needed = mutableListOf<String>()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.RECORD_AUDIO)
         }
-        if (missing.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, missing.toTypedArray(), 42)
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        if (needed.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, needed.toTypedArray(), 42)
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        val canOverlay = Settings.canDrawOverlays(this)
-        val server = prefs.getString("server", FloatingService.DEFAULT_SERVER)
-        val ready = canOverlay && isValidServer(server)
-        overlayBtn.apply {
-            text = if (canOverlay) "✓ Display-over-apps permission granted" else "Allow “display over other apps”"
-            isEnabled = !canOverlay
-            alpha = if (canOverlay) 0.6f else 1f
+    fun startEdgeAssistant(): Boolean {
+        if (!Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, "Allow \"Display over other apps\" to use Edge Assistant", Toast.LENGTH_LONG).show()
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            return false
         }
-        statusText.text = when {
-            !canOverlay -> "Next: allow display-over-apps, then the assistant wakes itself."
-            !isValidServer(server) -> "Server URL looks invalid — fix it below."
-            else -> "Assistant will open right now."
-        }
-        spinnerRow.visibility = if (canOverlay) View.GONE else View.VISIBLE
-        if (ready) launchAssistant()
-    }
-
-    private fun launchAssistant() {
-        if (!Settings.canDrawOverlays(this)) return
-        val url = prefs.getString("server", FloatingService.DEFAULT_SERVER).orEmpty().trim().removeSuffix("/")
-        if (!url.startsWith("http")) return
-        prefs.edit().putString("server", url).apply()
         ContextCompat.startForegroundService(
             this,
             Intent(this, FloatingService::class.java).setAction(FloatingService.ACTION_START),
         )
-        finish()
+        Toast.makeText(this, "Edge Assistant started — thin handle active at screen edge", Toast.LENGTH_SHORT).show()
+        return true
     }
 
-    private fun isValidServer(url: String?): Boolean = url?.trim().orEmpty().startsWith("http")
+    fun stopEdgeAssistant() {
+        startService(Intent(this, FloatingService::class.java).setAction(FloatingService.ACTION_STOP))
+        Toast.makeText(this, "Edge Assistant disabled", Toast.LENGTH_SHORT).show()
+    }
 
-    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+    fun isEdgeAssistantRunning(): Boolean {
+        return FloatingService.isRunning
+    }
+
+    override fun onBackPressed() {
+        val wv = webView
+        if (wv != null && wv.canGoBack()) {
+            wv.goBack()
+        } else {
+            super.onBackPressed()
+        }
+    }
+
+    override fun onDestroy() {
+        container.removeAllViews()
+        webView?.destroy()
+        webView = null
+        super.onDestroy()
+    }
+}
+
+class MainAppJsBridge(private val activity: MainActivity) {
+
+    @android.webkit.JavascriptInterface
+    fun getPlatform(): String = "android"
+
+    @android.webkit.JavascriptInterface
+    fun startEdgeAssistant(): Boolean {
+        var result = false
+        activity.runOnUiThread {
+            result = activity.startEdgeAssistant()
+        }
+        return result
+    }
+
+    @android.webkit.JavascriptInterface
+    fun stopEdgeAssistant() {
+        activity.runOnUiThread {
+            activity.stopEdgeAssistant()
+        }
+    }
+
+    @android.webkit.JavascriptInterface
+    fun isEdgeRunning(): Boolean {
+        return activity.isEdgeAssistantRunning()
+    }
 }

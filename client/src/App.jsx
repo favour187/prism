@@ -37,6 +37,7 @@ export default function App() {
   const abortRef = useRef(null);
   const toastTimer = useRef(null);
   const streamTextRef = useRef('');
+  const lastPayloadRef = useRef(null);
 
   const showToast = useCallback((message, kind = 'info') => {
     clearTimeout(toastTimer.current);
@@ -95,6 +96,7 @@ export default function App() {
     setPendingFiles([]);
     setPendingScreenshots([]);
     setPendingAction(null);
+    lastPayloadRef.current = payload;
     if (window.innerWidth <= 900) setSidebarOpen(false);
   }, []);
 
@@ -188,6 +190,7 @@ export default function App() {
     setPendingFiles([]);
     setPendingScreenshots([]);
     setPendingAction(null);
+    lastPayloadRef.current = payload;
 
     let sawMetaConvo = activeId;
     abortRef.current = streamChat(payload, {
@@ -227,6 +230,49 @@ export default function App() {
       return { explain: 'Explain', fix: 'Fix', improve: 'Improve', generate: 'Generate' }[a] ?? a;
     }
   }, [canSend, pendingFiles, pendingScreenshots, pendingAction, activeId, model, showToast, refreshConversations, search, autoSpeak]);
+
+  
+  const retryLastRequest = useCallback(() => {
+    if (!lastPayloadRef.current) return;
+    const payload = lastPayloadRef.current;
+    stopSpeaking();
+    streamTextRef.current = '';
+    setStream({ text: '', meta: null, error: null });
+
+    let sawMetaConvo = activeId;
+    abortRef.current = streamChat(payload, {
+      onMeta: (meta) => {
+        if (meta.conversationId && meta.conversationId !== sawMetaConvo) {
+          sawMetaConvo = meta.conversationId;
+          setActiveId(meta.conversationId);
+        }
+        setStream((s) => (s ? { ...s, meta: { ...(s.meta ?? {}), ...meta } } : s));
+      },
+      onDelta: (delta) => {
+        streamTextRef.current += delta;
+        setStream((s) => (s ? { ...s, text: s.text + delta } : s));
+      },
+      onNotice: (notice) => showToast(notice, 'info'),
+      onError: (err) => {
+        setStream((s) => (s ? { ...s, error: err } : { text: '', meta: null, error: err }));
+        showToast(err.message, 'error');
+      },
+      onDone: async (done) => {
+        setStream(null);
+        const finalText = streamTextRef.current;
+        streamTextRef.current = '';
+        if (done?.conversationId) {
+          sawMetaConvo = done.conversationId;
+          try {
+            const data = await api.getConversation(done.conversationId);
+            if (sawMetaConvo === done.conversationId) setMessages(data.messages);
+          } catch {  }
+        }
+        refreshConversations(search);
+        if (autoSpeak && finalText && ttsSupported()) speak(finalText).catch(() => {});
+      },
+    });
+  }, [activeId, showToast, refreshConversations, search, autoSpeak]);
 
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort();
@@ -519,6 +565,7 @@ export default function App() {
               stream={stream}
               onCodeAction={onCodeAction}
               onRegenerate={activeId ? regenerateMessage : null}
+              onRetry={stream?.error && lastPayloadRef.current ? retryLastRequest : null}
               onSuggestion={() => { document.querySelector('.composer textarea')?.focus(); }}
               onSpeak={ttsSupported()}
             />

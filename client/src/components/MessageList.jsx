@@ -107,7 +107,7 @@ const Message = memo(function Message({ msg, onCodeAction, onRegenerate, onSpeak
   );
 });
 
-function StreamingMessage({ stream, onCodeAction }) {
+function StreamingMessage({ stream, onCodeAction, onRetry = null }) {
   return (
     <article className="msg msg-assistant">
       <div className="msg-avatar streaming" aria-hidden="true">◮</div>
@@ -120,7 +120,14 @@ function StreamingMessage({ stream, onCodeAction }) {
         </div>
         {stream.error ? (
           <div className="msg-error" role="alert">
-            <strong>{stream.error.code ?? 'ERROR'}:</strong> {stream.error.message}
+            <div className="msg-error-head">
+              <strong>{stream.error.code ?? 'ERROR'}:</strong> {stream.error.message}
+              {onRetry && (
+                <button type="button" className="btn small retry-btn" onClick={onRetry} title="Retry request">
+                  ↻ Retry
+                </button>
+              )}
+            </div>
             {stream.text && (
               <div className="markdown partial">
                 <Markdown text={stream.text} onCodeAction={onCodeAction} />
@@ -152,6 +159,7 @@ export default function MessageList({
   stream,
   onCodeAction,
   onRegenerate = null,
+  onRetry = null,
   emptyHint = null,
   onSuggestion = null,
   onSpeak = false,
@@ -244,7 +252,7 @@ export default function MessageList({
                 />
               );
             })}
-            {stream && <StreamingMessage stream={stream} onCodeAction={onCodeAction} />}
+            {stream && <StreamingMessage stream={stream} onCodeAction={onCodeAction} onRetry={onRetry} />}
           </div>
         )}
       <div className="chat-pad" />

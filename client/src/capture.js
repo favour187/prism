@@ -184,3 +184,30 @@ window.__prismCaptureResult = (token, dataUrl) => {
     delete store[token];
   }
 };
+
+
+export function isEdgeRunning() {
+  try {
+    return Boolean(window.prismAndroid?.isEdgeRunning?.());
+  } catch {
+    return false;
+  }
+}
+
+export function startEdgeAssistant() {
+  try {
+    return Boolean(window.prismAndroid?.startEdgeAssistant?.());
+  } catch {
+    return false;
+  }
+}
+
+export function stopEdgeAssistant() {
+  try {
+    window.prismAndroid?.stopEdgeAssistant?.();
+    window.prismAndroid?.stopEdge?.();
+    return true;
+  } catch {
+    return false;
+  }
+}

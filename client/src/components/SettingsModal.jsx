@@ -1,9 +1,11 @@
+import { isAndroid, isEdgeRunning, startEdgeAssistant, stopEdgeAssistant } from '../capture.js';
 import { useState } from 'react';
 import { api } from '../api.js';
 
 export default function SettingsModal({ theme, onToggleTheme, cfg, onClose, onWiped }) {
   const [confirmWipe, setConfirmWipe] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [edgeActive, setEdgeActive] = useState(() => isAndroid() && isEdgeRunning());
 
   const wipe = async () => {
     setBusy(true);
@@ -36,6 +38,32 @@ export default function SettingsModal({ theme, onToggleTheme, cfg, onClose, onWi
             </button>
           </label>
         </section>
+
+        {isAndroid() && (
+          <section className="modal-section">
+            <h3>Edge Assistant</h3>
+            <p className="note" style={{ marginTop: 0, marginBottom: 12 }}>
+              Keep a minimal line handle at the screen edge to summon Prism anytime over other apps. Captures only when you tap.
+            </p>
+            <div className="row">
+              <span>Floating Edge Handle</span>
+              <button
+                className={`btn ${edgeActive ? 'danger' : 'primary'}`}
+                onClick={() => {
+                  if (edgeActive) {
+                    stopEdgeAssistant();
+                    setEdgeActive(false);
+                  } else {
+                    const started = startEdgeAssistant();
+                    setEdgeActive(started);
+                  }
+                }}
+              >
+                {edgeActive ? 'Disable Edge Assistant' : 'Start Edge Assistant'}
+              </button>
+            </div>
+          </section>
+        )}
 
         <section className="modal-section">
           <h3>Model provider</h3>

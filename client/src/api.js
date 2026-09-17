@@ -60,9 +60,15 @@ export const api = {
 
 export function streamChat(payload, handlers = {}, path = '/api/chat') {
   const controller = new AbortController();
+  const sendTs = Date.now();
+  let reqStartTs = null;
+  let firstByteTs = null;
+  let firstTokenTs = null;
+  let completedTs = null;
 
   (async () => {
     let res;
+    reqStartTs = Date.now();
     try {
       res = await fetch(path, {
         method: 'POST',
@@ -110,17 +116,54 @@ export function streamChat(payload, handlers = {}, path = '/api/chat') {
       }
       const { type, ...rest } = data;
       const t = type ?? event;
-      if (t === 'meta') handlers.onMeta?.(rest);
-      else if (t === 'delta') handlers.onDelta?.(rest.delta ?? '');
-      else if (t === 'notice') handlers.onNotice?.(rest.notice ?? '');
-      else if (t === 'done') handlers.onDone?.(rest);
-      else if (t === 'error') handlers.onError?.(rest);
+      if (t === 'meta') {
+        handlers.onMeta?.(rest);
+      } else if (t === 'delta') {
+        if (firstTokenTs == null) {
+          firstTokenTs = Date.now();
+        }
+        handlers.onDelta?.(rest.delta ?? '');
+      } else if (t === 'notice') {
+        handlers.onNotice?.(rest.notice ?? '');
+      } else if (t === 'done') {
+        completedTs = Date.now();
+        if (process.env.NODE_ENV !== 'production' || window.__PRISM_DEV_DIAGNOSTICS__) {
+          console.debug('[prism diagnostics]', {
+            sendTimestamp: sendTs,
+            requestStartTimestamp: reqStartTs,
+            firstByteTimestamp: firstByteTs,
+            firstTokenTimestamp: firstTokenTs,
+            completedTimestamp: completedTs,
+            totalResponseTimeMs: completedTs - sendTs,
+            timeToFirstByteMs: firstByteTs ? firstByteTs - reqStartTs : null,
+            timeToFirstTokenMs: firstTokenTs ? firstTokenTs - reqStartTs : null,
+          });
+        }
+        handlers.onDone?.({
+          ...rest,
+          diagnostics: {
+            sendTs,
+            reqStartTs,
+            firstByteTs,
+            firstTokenTs,
+            completedTs,
+            totalMs: completedTs - sendTs,
+            ttfb: firstByteTs ? firstByteTs - reqStartTs : null,
+            ttft: firstTokenTs ? firstTokenTs - reqStartTs : null,
+          },
+        });
+      } else if (t === 'error') {
+        handlers.onError?.(rest);
+      }
     };
 
     try {
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
+        if (firstByteTs == null) {
+          firstByteTs = Date.now();
+        }
         buffer += decoder.decode(value, { stream: true });
         let sep;
         while ((sep = buffer.indexOf('\n\n')) !== -1) {
