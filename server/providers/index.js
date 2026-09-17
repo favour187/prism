@@ -4,10 +4,6 @@ import { MockProvider } from './mock.js';
 
 let cached = null;
 
-/**
- * Provider factory. The rest of the app only depends on the AIProvider
- * interface (providers/base.js), which is what keeps the vendor swappable.
- */
 export function getProvider() {
   if (cached) return cached;
   if (config.aiProvider === 'mock') {
@@ -24,7 +20,6 @@ export function getProvider() {
   return cached;
 }
 
-/** For tests: reset the singleton. */
 export function resetProvider() {
   cached = null;
 }

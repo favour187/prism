@@ -37,7 +37,6 @@
     if (!current) return null;
     const r = norm(current);
     if (r.w < 8 || r.h < 8) return null;
-    // CSS px here are DIPs == window px; image natural size is display px → scale up.
     const sx = img.naturalWidth / img.getBoundingClientRect().width;
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(r.w * sx);
@@ -83,7 +82,6 @@
     if (e.key === 'Escape' && !committed) { committed = true; window.prismRegion.finish(null); }
     if (e.key === 'Enter' && current && !committed) { committed = true; result(); }
   });
-  // Double-click confirms faster.
   addEventListener('dblclick', () => { if (current && !committed) { committed = true; result(); } });
 
   window.prismRegion.onFrame((frame) => { img.src = frame.dataUrl; });

@@ -1,13 +1,5 @@
 import { AIProvider, ProviderError } from './base.js';
 
-/**
- * Featherless AI provider.
- *
- * Featherless exposes an OpenAI-compatible API
- * (https://api.featherless.ai/v1/chat/completions), so we speak plain HTTP +
- * server-sent events with no vendor SDK. The API key lives ONLY here,
- * server-side.
- */
 export class FeatherlessProvider extends AIProvider {
   id = 'featherless';
 
@@ -128,7 +120,7 @@ export class FeatherlessProvider extends AIProvider {
           try {
             json = JSON.parse(payload);
           } catch {
-            continue; // tolerate heartbeats/partials
+            continue;
           }
           const errPayload = json?.error;
           if (errPayload) {
@@ -176,11 +168,6 @@ export class FeatherlessProvider extends AIProvider {
     return Boolean(this.apiKey && this.sttModel);
   }
 
-  /**
-   * Speech-to-text via the OpenAI-compatible /audio/transcriptions endpoint.
-   * Works with Featherless-hosted whisper-style models (or any compatible
-   * endpoint when FEATHERLESS_STT_BASE_URL is set).
-   */
   async transcribeAudio({ buffer, mime, filename }) {
     this.#assertReady();
     if (!this.sttModel) {

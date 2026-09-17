@@ -14,18 +14,12 @@ const FALLBACK_STYLES = [
   { id: 'to_fr', label: '→ French' },
 ];
 
-/**
- * The Write desk — chat-adjacent space where authoring happens (the "other
- * things like Arc"): draft anything, transform it with style chips or a
- * free-form instruction, undo freely, then copy / insert / download / send
- * it into the chat for a review pass.
- */
 export default function WriteDesk({ onDiscuss, onToast }) {
   const [doc, setDoc] = useState(() => localStorage.getItem('prism.writedesk.doc') ?? '');
   const [history, setHistory] = useState([]);
   const [styles, setStyles] = useState(FALLBACK_STYLES);
   const [instruction, setInstruction] = useState('');
-  const [busy, setBusy] = useState(null); // style id or 'custom'
+  const [busy, setBusy] = useState(null);
 
   useEffect(() => {
     api.listWriteStyles().then((d) => d.styles?.length && setStyles(d.styles)).catch(() => {});

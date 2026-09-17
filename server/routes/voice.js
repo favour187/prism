@@ -6,7 +6,7 @@ import { chatLimiter } from '../middleware/rateLimit.js';
 
 const AUDIO_MIMES = new Set([
   'audio/webm', 'audio/webm;codecs=opus', 'audio/ogg', 'audio/mp4', 'audio/mpeg',
-  'audio/wav', 'audio/x-wav', 'audio/x-m4a', 'audio/m4a', 'audio/aac', 'video/webm', // Safari/Chrome variants
+  'audio/wav', 'audio/x-wav', 'audio/x-m4a', 'audio/m4a', 'audio/aac', 'video/webm',
 ]);
 
 const upload = multer({
@@ -16,11 +16,6 @@ const upload = multer({
 
 const router = Router();
 
-/**
- * POST /api/transcribe — multipart 'audio' (≤ MAX_AUDIO_MB).
- * The microphone audio goes straight to the configured STT endpoint
- * (server-side key); the raw audio is never stored on disk.
- */
 router.post('/', chatLimiter, (req, res, next) => {
   upload.single('audio')(req, res, async (err) => {
     if (err) {

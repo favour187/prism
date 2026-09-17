@@ -30,11 +30,6 @@ const upload = multer({
 
 const router = Router();
 
-/**
- * POST /api/uploads — multipart 'files'. Validates type/size, persists to
- * disk, extracts text for code/doc files, normalizes images.
- * Every uploaded byte stays server-side; only metadata crosses the wire.
- */
 router.post('/', uploadLimiter, (req, res, next) => {
   upload.array('files', config.maxUploadFiles)(req, res, async (multerErr) => {
     if (multerErr) {
@@ -61,7 +56,6 @@ router.post('/', uploadLimiter, (req, res, next) => {
         const kind = kindOfExt(ext);
 
         if (kind === 'image') {
-          // Sniff real bytes (never trust the extension) then normalize + overwrite.
           const sniffed = await sniffImageMime(f.path);
           if (!sniffed) throw new FileValidationError(`"${safeName}" is not a valid image file.`);
           const norm = await normalizeImageBuffer(f.path);
@@ -110,7 +104,6 @@ router.post('/', uploadLimiter, (req, res, next) => {
   });
 });
 
-/** GET /api/uploads/:id/raw — serves an uploaded image back to the owning client (for previews). */
 router.get('/:id/raw', (req, res, next) => {
   try {
     const a = store.getAttachment(req.params.id);

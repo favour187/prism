@@ -12,7 +12,6 @@ function timeAgo(ts) {
   return new Date(ts).toLocaleDateString();
 }
 
-/** Arc-style grouping: Today / Yesterday / Previous 7 days / Earlier. */
 function groupLabel(ts) {
   const now = new Date();
   const startOfDay = (dt) => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
@@ -23,7 +22,6 @@ function groupLabel(ts) {
   return 'Earlier';
 }
 
-/** Group conversations by bucket while preserving API order (already newest-first). */
 function groupConversations(items) {
   const groups = [];
   let current = null;
@@ -52,7 +50,7 @@ export default function Sidebar({
   open,
   onClose,
 }) {
-  const [editing, setEditing] = useState(null); // id being renamed
+  const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState('');
 
   const commitRename = (id) => {

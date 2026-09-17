@@ -1,25 +1,8 @@
-/**
- * Prism Desktop — Arc-style floating screen assistant.
- *
- *  • Frameless, always-on-top mini window that floats over your apps.
- *  • GLOBAL hotkey Ctrl/⌘+Shift+A toggles it from anywhere in the OS.
- *  • One-click capture: full screen, a specific window, or a drag-select
- *    region (transparent selector appears over your screen, like snipping).
- *  • The panel itself backs off while capturing so it never photobombs.
- *  • Nothing is ever recorded — one frame per explicit click.
- *
- * Runs against any Prism server:
- *   npm install && npm start                 → uses https://prism-yks3.onrender.com
- *   PRISM_URL=http://localhost:5173 npm run dev
- */
 const { app, BrowserWindow, globalShortcut, ipcMain, screen, desktopCapturer, shell, session, clipboard } = require('electron');
 const path = require('node:path');
 
-// Optional: true keystroke paste for "Insert into app". Gracefully degrades
-// to clipboard-only if the prebuilt binary is unavailable for this platform.
 let robot = null;
 try {
-  // eslint-disable-next-line global-require
   robot = require('@jitsi/robotjs');
 } catch {
   robot = null;
@@ -62,8 +45,6 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      // Answer is rendered locally; captures are done by the main process —
-      // renderer never gets session-level screen access by default.
     },
   });
 
@@ -86,7 +67,6 @@ function toggleWindow() {
   }
 }
 
-/** Hide the panel (+ HUD), wait for compositing, capture, restore. */
 async function withHiddenWindow(fn) {
   const hidden = [];
   for (const w of [win, edgeWin, circleWin]) {
@@ -102,7 +82,7 @@ async function withHiddenWindow(fn) {
     for (const w of hidden) {
       if (w.isDestroyed()) continue;
       if (w === win) w.show();
-      else w.showInactive(); // HUD never steals focus from your apps
+      else w.showInactive();
     }
   }
 }
@@ -114,7 +94,6 @@ async function captureDisplayDataUrl(display) {
     types: ['screen'],
     thumbnailSize: { width: Math.round(width * scale), height: Math.round(height * scale) },
   });
-  // Prefer the source matching this display (Electron exposes display_id as string).
   const source =
     sources.find((s) => String(s.display_id) === String(display.id)) ?? sources[0];
   if (!source) throw new Error('No screen source available for capture.');
@@ -123,7 +102,6 @@ async function captureDisplayDataUrl(display) {
   return { dataUrl, width: source.thumbnail.getSize().width, height: source.thumbnail.getSize().height, scale };
 }
 
-// ------------------------------- IPC ---------------------------------------
 
 ipcMain.handle('prism:capture-screen', () =>
   withHiddenWindow(async () => {
@@ -139,7 +117,7 @@ ipcMain.handle('prism:list-windows', async () => {
     fetchWindowIcons: true,
   });
   return sources
-    .filter((s) => !/^prism/i.test(s.name)) // don't offer to capture ourselves
+    .filter((s) => !/^prism/i.test(s.name))
     .map((s) => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL() }));
 });
 
@@ -190,7 +168,7 @@ ipcMain.handle('prism:capture-region', () =>
       regionWin.on('closed', () => {
         regionWin = null;
         if (regionResolve) {
-          regionResolve(null); // closed without a selection
+          regionResolve(null);
           regionResolve = null;
         }
       });
@@ -226,12 +204,6 @@ ipcMain.handle('prism:set-size', (_e, w, h) => {
   return { w: width, h: height };
 });
 
-/**
- * "Insert into app": puts the text on the clipboard, hides the panel so the
- * previously focused app regains focus, and — when the optional robot module
- * is available (and macOS Accessibility permission was granted) — simulates
- * a genuine paste keystroke into that app.
- */
 ipcMain.handle('prism:write', (_e, text) => {
   const payload = String(text ?? '').slice(0, 1_000_000);
   clipboard.writeText(payload);
@@ -240,7 +212,7 @@ ipcMain.handle('prism:write', (_e, text) => {
     setTimeout(() => {
       try {
         robot.keyTap('v', process.platform === 'darwin' ? 'command' : 'control');
-      } catch { /* accessibility permission missing — clipboard is still set */ }
+      } catch {  }
       setTimeout(() => win && !win.isDestroyed() && win.show(), 350);
     }, 320);
     return { copied: true, pasted: true };
@@ -248,10 +220,6 @@ ipcMain.handle('prism:write', (_e, text) => {
   return { copied: true, pasted: false };
 });
 
-// -------------------- inline write bar (Arc-style, any app) -----------------
-// ⌘/Ctrl+Shift+R grabs the selection in WHATEVER app is focused, opens the
-// floating write bar, style chips rewrite it, and Enter pastes the rewrite
-// straight back into the source app. No panel context-switch.
 
 let writeWin = null;
 let writeSelection = { text: '', previous: '' };
@@ -259,10 +227,9 @@ let writeDidPaste = false;
 
 const MOD = process.platform === 'darwin' ? 'command' : 'control';
 
-/** Simulate copy, read the clipboard, preserve what was there. */
 async function grabSelection() {
   const previous = clipboard.readText();
-  let text = previous; // graceful path: robot missing → treat clipboard as selection
+  let text = previous;
   if (robot) {
     try {
       robot.keyTap('c', MOD);
@@ -270,7 +237,7 @@ async function grabSelection() {
       const after = clipboard.readText();
       text = after === previous ? '' : after;
     } catch {
-      text = previous; // no Accessibility permission — clipboard stays intact
+      text = previous;
     }
   }
   return { text: String(text ?? ''), previous: String(previous ?? '') };
@@ -279,7 +246,7 @@ async function grabSelection() {
 function openWriteBar() {
   if (writeWin && !writeWin.isDestroyed()) {
     writeWin.close();
-    return; // second press toggles it away
+    return;
   }
   grabSelection().then((sel) => {
     writeSelection = sel;
@@ -314,10 +281,9 @@ function openWriteBar() {
     writeWin.on('closed', () => {
       writeWin = null;
       if (!writeDidPaste && writeSelection.previous) {
-        clipboard.writeText(writeSelection.previous); // never clobber the user's clipboard on cancel
+        clipboard.writeText(writeSelection.previous);
       }
     });
-    // Arc popovers go away when you click elsewhere.
     writeWin.on('blur', () => {
       setTimeout(() => {
         if (writeWin && !writeWin.isDestroyed() && !writeWin.isFocused()) writeWin.close();
@@ -336,14 +302,14 @@ ipcMain.handle('prism:write-back', (_e, text) => {
   writeDidPaste = true;
   clipboard.writeText(payload);
   const w = writeWin;
-  if (w && !w.isDestroyed()) w.hide(); // source app regains focus
+  if (w && !w.isDestroyed()) w.hide();
   let pasted = false;
   if (robot) {
     pasted = true;
     setTimeout(() => {
       try {
         robot.keyTap('v', MOD);
-      } catch { /* accessibility missing — clipboard is still set */ }
+      } catch {  }
       if (w && !w.isDestroyed()) w.close();
     }, 260);
   } else if (w && !w.isDestroyed()) {
@@ -357,7 +323,6 @@ ipcMain.on('prism:write-cancel', () => {
   if (writeWin && !writeWin.isDestroyed()) writeWin.close();
 });
 
-/** Show the overlay and hand it a payload over IPC (once it has a listener). */
 function presentOverlay(channel, payload) {
   if (!win || win.isDestroyed()) createWindow();
   const deliver = () => {
@@ -372,12 +337,6 @@ function presentOverlay(channel, payload) {
   }
 }
 
-// ------------------- HUD: edge line + circle launcher ----------------------
-// Mouse-first affordances so the hotkeys are never required:
-//  • edge line — a thin strip pinned to the right screen edge; click toggles
-//    the assistant panel, drag repositions it vertically.
-//  • circle — an obvious always-visible launcher that opens the main app.
-// Opt out with PRISM_EDGE=0 / PRISM_LAUNCHER=0.
 
 let edgeWin = null;
 let circleWin = null;
@@ -438,7 +397,6 @@ ipcMain.on('hud:drag-edge', (_e, dy) => {
 });
 ipcMain.on('hud:drag-end', () => { edgeDragBase = null; });
 
-// ------------------------------- lifecycle ---------------------------------
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -449,13 +407,10 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
-    // Voice input (getUserMedia mic) and TTS are part of the assistant UX.
     session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => {
       cb(permission === 'media' || permission === 'audioCapture' || permission === 'speaker-selection');
     });
 
-    // Watch mode needs a getDisplayMedia stream. Electron 31+ can show the
-    // native system picker; otherwise we grant the primary screen source.
     if (session.defaultSession.setDisplayMediaRequestHandler) {
       session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
         desktopCapturer
@@ -466,19 +421,18 @@ if (!gotLock) {
     }
 
     createWindow();
-    createHud(); // edge line + circle launcher — click, no hotkeys required
+    createHud();
     const ok = globalShortcut.register(SHORTCUT, toggleWindow);
     if (!ok) console.warn('[prism-desktop] could not register', SHORTCUT);
     globalShortcut.register('CommandOrControl+Shift+Q', () => app.quit());
 
-    // Inline, system-wide Arc-style commands:
     for (const [accel, fn, label] of [
       ['CommandOrControl+Shift+R', openWriteBar, 'write-selection'],
       [
         'CommandOrControl+Shift+G',
         async () => {
           const sel = await grabSelection();
-          if (sel.previous) clipboard.writeText(sel.previous); // grab is inspect-only here
+          if (sel.previous) clipboard.writeText(sel.previous);
           if (sel.text) presentOverlay('prism:quick-ask', sel.text);
           else toggleWindow();
         },
@@ -493,8 +447,7 @@ if (!gotLock) {
     }
   });
 
-  // Assistant-style: closing windows keeps the daemon alive (reopen via hotkey).
-  app.on('window-all-closed', () => { /* stay resident */ });
+  app.on('window-all-closed', () => {  });
   app.on('will-quit', () => globalShortcut.unregisterAll());
   app.on('activate', () => { if (!win) createWindow(); });
 }

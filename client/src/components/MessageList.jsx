@@ -6,7 +6,6 @@ import CodeBlock, { InlineCode } from './CodeBlock.jsx';
 const rehypePlugins = [[rehypeHighlight, { detect: false, ignoreMissing: true }]];
 const remarkPlugins = [remarkGfm];
 
-/** Compact relative time for message meta (Arc-style "3m ago"). */
 function timeAgo(ts) {
   if (!ts) return '';
   const s = Math.max(1, Math.floor((Date.now() - ts) / 1000));

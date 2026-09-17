@@ -36,7 +36,6 @@ export class OrchestratorError extends Error {
   }
 }
 
-/** Build the file-context turn from attached development files. */
 function buildFileContextBlock(attachments) {
   const files = attachments.filter((a) => a.kind === 'file' && a.extracted_text);
   if (!files.length) return null;
@@ -61,18 +60,11 @@ function buildFileContextBlock(attachments) {
   return parts.join('\n');
 }
 
-/**
- * Run one chat turn end-to-end:
- *   memory → file context → vision/OCR routing → provider stream → persistence.
- *
- * Async generator yielding typed events for the SSE layer:
- *   { type:'meta', ... } { type:'delta', delta } { type:'done', usage } { type:'notice', notice }
- */
 export async function* runChatTurn({
   conversationId = null,
   content: rawContent = '',
   attachmentIds = [],
-  screenshots = [], // data URLs captured in the client
+  screenshots = [],
   action = null,
   selection = '',
   model = null,
@@ -81,7 +73,6 @@ export async function* runChatTurn({
 }) {
   const provider = getProvider();
 
-  // ---- validation ------------------------------------------------------------
   const content = String(rawContent ?? '').slice(0, 64_000).trim();
   const hasAnything = Boolean(content) || screenshots.length > 0 || attachmentIds.length > 0 || Boolean(action) || skip_persist;
   if (!hasAnything) {
@@ -92,7 +83,6 @@ export async function* runChatTurn({
     throw new ProviderError(provider.notReadyReason(), 'PROVIDER_NOT_CONFIGURED', 503);
   }
 
-  // ---- conversation ----------------------------------------------------------
   let cid = conversationId;
   if (cid) {
     if (!store.getConversation(cid)) throw new OrchestratorError('Conversation not found.', 'NOT_FOUND', 404);
@@ -100,14 +90,12 @@ export async function* runChatTurn({
     cid = store.createConversation({ title: 'New conversation' }).id;
   }
 
-  // ---- attachments: files → text context, images → vision parts --------------
   const attachments = store.getAttachments(attachmentIds);
   if (attachments.length !== attachmentIds.length) {
     throw new OrchestratorError('One or more attachments were not found (upload again).', 'ATTACHMENT_NOT_FOUND', 404);
   }
   const fileContext = buildFileContextBlock(attachments);
 
-  /** @type {{dataUrl:string, origin:'upload'|'capture', name:string}[]} */
   const images = [];
   for (const a of attachments.filter((x) => x.kind === 'image')) {
     const buf = await fs.readFile(a.path).catch(() => null);
@@ -116,20 +104,18 @@ export async function* runChatTurn({
     images.push({ dataUrl: toDataUrl(norm.buffer, norm.mime), origin: 'upload', name: a.name });
   }
   for (const [i, dataUrlRaw] of screenshots.entries()) {
-    const { buffer } = decodeDataUrl(dataUrlRaw); // throws ImageValidationError on bad input
+    const { buffer } = decodeDataUrl(dataUrlRaw);
     const norm = await normalizeImageBuffer(buffer);
     images.push({ dataUrl: toDataUrl(norm.buffer, norm.mime), origin: 'capture', name: `screenshot-${i + 1}` });
   }
   const capturedShot = images.find((im) => im.origin === 'capture');
 
-  // ---- tool/action rendering ---------------------------------------------------
   let toolPrompt = null;
   if (action) {
     toolPrompt = renderTool(action, selection);
     if (!toolPrompt) throw new OrchestratorError(`Unknown action "${action}".`, 'UNKNOWN_ACTION', 400);
   }
 
-  // ---- assemble the user turn ---------------------------------------------------
   const textParts = [];
   if (toolPrompt) textParts.push(toolPrompt);
   if (content) textParts.push(content);
@@ -137,15 +123,11 @@ export async function* runChatTurn({
   if (fileContext) textParts.push(fileContext);
   const userText = textParts.join('\n\n').trim();
 
-  // ---- build provider messages (memory window) ----------------------------------
   const history = store.getRecentHistory(cid, config.historyMessages);
   const messages = [
     { role: 'system', content: SYSTEM_PROMPT },
     ...history.map((h) => ({ role: h.role, content: h.content })),
   ];
-  // Regenerate (skip_persist) replays history with NO new user turn: the client
-  // deletes the last assistant reply first, so the window already ends in the
-  // user question we are answering again.
   const userTurn =
     images.length > 0
       ? {
@@ -158,8 +140,6 @@ export async function* runChatTurn({
       : { role: 'user', content: userText };
   if (!skip_persist) messages.push(userTurn);
 
-  // ---- persist the user's message (display form, not the prompt form) -----------
-  // Skipped when regenerating: we replay the previous, already-saved turn instead.
   const displayContent =
     [content || (action ? `${toolsLabel(action)}${selection ? ' selected code' : ''}` : ''),
       screenshots.length ? `📷 ${screenshots.length} screenshot(s) captured` : '',
@@ -178,7 +158,6 @@ export async function* runChatTurn({
     store.attachToConversation(cid, attachmentIds);
   }
 
-  // ---- pick model: vision route when images are present --------------------------
   const chatModel = model || config.featherless.chatModel;
   const visionModel = config.featherless.visionModel;
   const wantsVision = images.length > 0;
@@ -195,7 +174,6 @@ export async function* runChatTurn({
     vision: visionMode,
   };
 
-  // ---- stream; vision failure → OCR fallback -------------------------------------
   let full = '';
   let usage = null;
 
@@ -222,7 +200,6 @@ export async function* runChatTurn({
       wantsVision && !(err?.code === 'CLIENT_ABORTED') && images.some((im) => im.origin === 'capture' || im.origin === 'upload');
     if (!canOcrFallback) throw err;
 
-    // -------- OCR fallback pipeline --------
     yield { type: 'notice', notice: 'Vision model unavailable — falling back to OCR on the screenshot.' };
     visionMode = 'ocr';
     usedModel = chatModel;
@@ -257,7 +234,6 @@ export async function* runChatTurn({
     }
   }
 
-  // ---- persist assistant message + auto-title ------------------------------------
   const assistantMessageId = store.addMessage({
     conversationId: cid,
     role: 'assistant',

@@ -14,16 +14,11 @@ const FALLBACK_STYLES = [
   { id: 'to_fr', label: '→ French' },
 ];
 
-/**
- * Inline Write bar — the Arc moment in any app: ⌘⇧R with text selected
- * anywhere → this bar floats where your cursor is → pick a style (or 1-8)
- * → Enter pastes the rewrite straight back into the app it came from.
- */
 export default function WriteBarApp() {
-  const [selection, setSelection] = useState(null); // { text, clipboardBacked }
+  const [selection, setSelection] = useState(null);
   const [styles, setStyles] = useState(FALLBACK_STYLES);
   const [result, setResult] = useState(null);
-  const [busy, setBusy] = useState(null); // style id being applied
+  const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
   const [status, setStatus] = useState(null);
   const resultRef = useRef(null);
@@ -59,7 +54,6 @@ export default function WriteBarApp() {
     if (desktop?.writePasteBack) {
       const res = await desktop.writePasteBack(payload).catch(() => ({ copied: true, pasted: false }));
       setStatus(res.pasted ? 'Inserted ✓' : 'Copied — paste with Ctrl/⌘+V');
-      // window closes itself in the copied path too; status is visible when paste keystroke failed
     } else {
       await navigator.clipboard.writeText(payload).catch(() => {});
       setStatus('Copied — paste with Ctrl/⌘+V');
@@ -71,7 +65,6 @@ export default function WriteBarApp() {
     else window.close();
   }, []);
 
-  // Keyboard-first: 1-8 pick a style, Enter inserts, Esc cancels.
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') { e.preventDefault(); cancel(); return; }

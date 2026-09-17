@@ -50,10 +50,10 @@ export default function Composer({
   onToast,
 }) {
   const [text, setText] = useState('');
-  const [mic, setMic] = useState('idle'); // idle | recording | transcribing
+  const [mic, setMic] = useState('idle');
   const [styles, setStyles] = useState(FALLBACK_STYLES);
   const [styleBusy, setStyleBusy] = useState(null);
-  const [writeState, setWriteState] = useState(null); // { original }
+  const [writeState, setWriteState] = useState(null);
   const [palIndex, setPalIndex] = useState(0);
   const taRef = useRef(null);
   const fileRef = useRef(null);
@@ -107,7 +107,6 @@ export default function Composer({
     setWriteState(null);
   };
 
-  // ---------------- command palette (type /) ----------------
   const paletteOpen = text.startsWith('/');
   const commands = useMemo(() => {
     const list = [
@@ -122,12 +121,10 @@ export default function Composer({
     ];
     const q = text.slice(1).trim().toLowerCase();
     return q ? list.filter((c) => c.id.includes(q) || c.label.toLowerCase().includes(q)) : list;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, speakOn, onNew, onToggleSpeak, onOpenAssistant]);
 
   useEffect(() => { setPalIndex(0); }, [text]);
 
-  // ---------------- inline write (type text → style chips) ----------------
   const writeChipsOpen = Boolean(text.trim()) && !paletteOpen && !disabled;
   const transformed = writeState && text !== writeState.original;
 
@@ -192,7 +189,7 @@ export default function Composer({
 
   return (
     <div className="composer-wrap">
-      {/* pending attachments / screenshots / actions tray */}
+      {}
       {(pendingFiles.length > 0 || screenshots.length > 0 || pendingAction) && (
         <div className="tray" aria-label="Pending context">
           {pendingAction && (

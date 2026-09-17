@@ -18,16 +18,16 @@ export default function App() {
   const [conversations, setConversations] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [stream, setStream] = useState(null); // { text, meta, error }
+  const [stream, setStream] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 900);
   const [theme, setTheme] = useState(document.documentElement.dataset.theme ?? 'dark');
   const [search, setSearch] = useState('');
 
-  const [pendingFiles, setPendingFiles] = useState([]);     // uploaded attachments
-  const [pendingScreenshots, setPendingScreenshots] = useState([]); // {id, dataUrl, name}
-  const [pendingAction, setPendingAction] = useState(null); // { action, selection }
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const [pendingScreenshots, setPendingScreenshots] = useState([]);
+  const [pendingAction, setPendingAction] = useState(null);
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const [view, setView] = useState('chat'); // 'chat' | 'write'
+  const [view, setView] = useState('chat');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [model, setModel] = useState(() => localStorage.getItem('prism.model') ?? '');
   const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('prism.autospeak') !== '0');
@@ -43,13 +43,11 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(null), 4200);
   }, []);
 
-  // ------------------------------ bootstrap ------------------------------------
   useEffect(() => {
     api.getConfig()
       .then(setCfg)
       .catch(() => showToast('Backend unreachable — is the server running?', 'error'));
     refreshConversations();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -70,7 +68,6 @@ export default function App() {
     }
   }, [showToast]);
 
-  // debounced search
   useEffect(() => {
     const t = setTimeout(() => refreshConversations(search), 250);
     return () => clearTimeout(t);
@@ -120,7 +117,6 @@ export default function App() {
     }
   }, [refreshConversations, search, showToast]);
 
-  // ------------------------------ uploading -------------------------------------
   const addFiles = useCallback(async (fileList) => {
     const files = [...fileList];
     if (!files.length) return;
@@ -138,7 +134,6 @@ export default function App() {
     }
   }, [showToast]);
 
-  // ------------------------------ sending ---------------------------------------
   const canSend = useMemo(() => !stream, [stream]);
 
   const sendMessage = useCallback(({ content }) => {
@@ -217,7 +212,7 @@ export default function App() {
           try {
             const data = await api.getConversation(done.conversationId);
             if (sawMetaConvo === done.conversationId) setMessages(data.messages);
-          } catch { /* keep optimistic view */ }
+          } catch {  }
         }
         refreshConversations(search);
         if (autoSpeak && finalText && ttsSupported()) speak(finalText).catch(() => {});
@@ -234,13 +229,11 @@ export default function App() {
     setStream((s) => (s && s.text ? { ...s, error: { code: 'STOPPED', message: 'Generation stopped.' } } : null));
   }, []);
 
-  /** Regenerate the most recent assistant reply. */
   const regenerateMessage = useCallback((msg) => {
     if (stream) return;
     if (!activeId && !msg?.id) return;
     stopSpeaking();
     streamTextRef.current = '';
-    // Optimistically drop the last assistant reply; it is replaced on done.
     setMessages((prev) => {
       const idx = prev.map((m) => m.role).lastIndexOf('assistant');
       if (idx === -1) return prev;
@@ -266,7 +259,7 @@ export default function App() {
           try {
             const data = await api.getConversation(done.conversationId);
             setMessages(data.messages);
-          } catch { /* keep optimistic view */ }
+          } catch {  }
         }
         refreshConversations(search);
         if (autoSpeak && finalText && ttsSupported()) speak(finalText).catch(() => {});
@@ -274,16 +267,14 @@ export default function App() {
     }, model || null);
   }, [stream, activeId, model, showToast, refreshConversations, search, autoSpeak]);
 
-  // Code-block quick actions → compose an action turn
   const onCodeAction = useCallback((action, code) => {
     setPendingAction({ action, selection: code });
     showToast(`${action[0].toUpperCase() + action.slice(1)}: selected code attached. Press send (or add a note first).`);
     document.querySelector('.composer textarea')?.focus();
   }, [showToast]);
 
-  /** Watch-mode narration: a background turn describing the visual change. */
   const narrateShot = useCallback((dataUrl, n) => {
-    if (stream) return; // never interrupt a user's turn with a narration
+    if (stream) return;
     stopSpeaking();
     streamTextRef.current = '';
     setMessages((prev) => [
@@ -322,7 +313,7 @@ export default function App() {
             try {
               const data = await api.getConversation(done.conversationId);
               setMessages(data.messages);
-            } catch { /* keep optimistic view */ }
+            } catch {  }
           }
           if (autoSpeak && finalText && ttsSupported()) speak(finalText).catch(() => {});
         },
@@ -330,13 +321,11 @@ export default function App() {
     );
   }, [stream, activeId, model, autoSpeak, showToast]);
 
-  /** Write desk → chat handoff: ask the model to review the draft. */
   const discussDraft = useCallback((docText) => {
     setView('chat');
     sendMessage({ content: `Review this draft and suggest improvements — be specific:\n\n${String(docText).slice(0, 8000)}` });
   }, [sendMessage]);
 
-  // Screenshot captured in the floating assistant
   const onScreenshot = useCallback((dataUrl, name = 'screenshot.png') => {
     setPendingScreenshots((prev) => [
       ...prev,
@@ -345,8 +334,6 @@ export default function App() {
     showToast('Screenshot attached — preview is in the composer.', 'success');
   }, [showToast]);
 
-  // Global shortcuts: Ctrl/Cmd+Shift+A toggles the screen assistant, plus
-  // Arc-style keys (Cmd+K palette, Cmd+N new chat, Cmd+J sidebar) for everyone.
   useEffect(() => {
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
@@ -383,7 +370,6 @@ export default function App() {
         setAssistantOpen(false);
         setSettingsOpen(false);
       }
-      // Arc-style: focus the composer quickly with Tab (unless already typing).
       if (e.key === 'Tab' && view === 'chat') {
         const active = document.activeElement;
         const typing = active && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT' || active.tagName === 'SELECT');

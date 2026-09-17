@@ -6,12 +6,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 
-/**
- * Invisible trampoline: the MediaProjection consent dialog must be launched
- * from an Activity, so the service bounces through this transparent host.
- * The dialog itself is the privacy gate — capture never starts without the
- * user's explicit tap, and only a single frame is taken.
- */
 class CapturePermissionActivity : ComponentActivity() {
 
     private val captureLauncher = registerForActivityResult(

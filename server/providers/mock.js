@@ -1,14 +1,5 @@
 import { AIProvider } from './base.js';
 
-/**
- * Mock provider — LOCAL DEV / CI ONLY.
- *
- * Activated only when AI_PROVIDER=mock is explicitly set, so the full stack
- * (streaming SSE, persistence, pipeline ordering, error surfaces) can be
- * exercised without a Featherless key. It intentionally announces itself so
- * behaviour is never mistaken for a real model. Production must use
- * AI_PROVIDER=featherless.
- */
 export class MockProvider extends AIProvider {
   id = 'mock';
 
@@ -75,7 +66,6 @@ Now send a real message, attach a file, or capture your screen with \`Ctrl/⌘+S
     const hasImages = Array.isArray(lastUser?.content) && lastUser.content.some((p) => p.type === 'image_url');
 
     const reply = this.#replyFor(text, hasImages);
-    // stream word-ish chunks to mimic a real model cadence
     const tokens = reply.match(/\S+\s*/g) ?? [reply];
     for (const t of tokens) {
       yield { delta: t };

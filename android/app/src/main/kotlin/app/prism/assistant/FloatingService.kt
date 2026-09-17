@@ -42,11 +42,6 @@ import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/**
- * The floating assistant: a draggable bubble over other apps + a panel window
- * hosting the Prism overlay web app. Screenshots are single frames captured
- * through MediaProjection only when the user explicitly taps a capture button.
- */
 class FloatingService : Service() {
 
     companion object {
@@ -78,7 +73,6 @@ class FloatingService : Service() {
 
     private var webView: WebView? = null
 
-    // ---- one-shot capture state ----
     private var pendingToken: String? = null
     private var projection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
@@ -175,7 +169,6 @@ class FloatingService : Service() {
             .build()
     }
 
-    // ------------------------------- bubble ---------------------------------
 
     @SuppressLint("ClickableViewAccessibility")
     private fun ensureBubble() {
@@ -231,7 +224,6 @@ class FloatingService : Service() {
         bubbleParams = params
     }
 
-    // -------------------------------- panel ---------------------------------
 
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     private fun ensurePanel() {
@@ -246,7 +238,6 @@ class FloatingService : Service() {
             settings.mediaPlaybackRequiresUserGesture = false
             addJavascriptInterface(PrismJsBridge(this@FloatingService), "prismAndroid")
             webChromeClient = object : WebChromeClient() {
-                // Grant the WebView mic access for voice input once the OS permission is held.
                 override fun onPermissionRequest(request: PermissionRequest) {
                     val wantsAudio = request.resources.any { it == PermissionRequest.RESOURCE_AUDIO_CAPTURE }
                     val osGranted = ContextCompat.checkSelfPermission(
@@ -315,13 +306,11 @@ class FloatingService : Service() {
 
     fun hidePanelForCapture() = showPanel(false)
 
-    // --------------------------- capture pipeline ----------------------------
 
-    /** Called from the JS bridge (any thread) when the web UI requests a frame. */
     fun requestCapture(kind: String, token: String) {
         mainHandler.post {
             if (pendingToken != null) {
-                evaluateCaptureResult(token, null) // busy — resolve as cancelled
+                evaluateCaptureResult(token, null)
                 return@post
             }
             pendingToken = token
@@ -336,7 +325,7 @@ class FloatingService : Service() {
     }
 
     private fun beginCapture(resultCode: Int, data: Intent) {
-        goForeground(MediaProj) // Foreground type must be mediaProjection before capture APIs (API 34+).
+        goForeground(MediaProj)
         captureDone = false
         try {
             val mp = projectionManager.getMediaProjection(resultCode, data)
@@ -407,7 +396,7 @@ class FloatingService : Service() {
         mainHandler.post {
             evaluateCaptureResult(token, bitmap?.toPngDataUrl())
             showPanel(true)
-            goForeground(SpecialUse) // Switch the service back to its steady-state type.
+            goForeground(SpecialUse)
         }
     }
 
@@ -424,7 +413,6 @@ class FloatingService : Service() {
 
     private fun evaluateCaptureResult(token: String?, dataUrl: String?) {
         if (token == null) return
-        // Token is web-generated alphanumeric; the data URL is base64 — both are safe inside single quotes.
         webView?.evaluateJavascript("window.__prismCaptureResult && window.__prismCaptureResult('$token','${dataUrl ?: ""}')", null)
     }
 
@@ -444,7 +432,6 @@ class FloatingService : Service() {
         panelVisible = false
     }
 
-    // ------------------------------- helpers --------------------------------
 
     @Suppress("DEPRECATION")
     private fun displaySize(withDpi: Boolean = false): Triple<Int, Int, Int> {
@@ -472,7 +459,6 @@ class FloatingService : Service() {
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).roundToInt()
 }
 
-/** Values/extras connector between the JS bridge and the service. */
 class PrismJsBridge(private val service: FloatingService) {
 
     @android.webkit.JavascriptInterface

@@ -19,14 +19,13 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
-// ---- security headers --------------------------------------------------------
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"], // small inline style attrs in the SPA
+        styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'blob:'],
         mediaSrc: ["'self'", 'blob:'],
         connectSrc: ["'self'"],
@@ -39,7 +38,6 @@ app.use(
   }),
 );
 
-// ---- CORS: same-origin by default; extra origins only when configured --------
 if (config.corsOrigins.length) {
   app.use(
     cors({
@@ -52,11 +50,9 @@ if (config.corsOrigins.length) {
   );
 }
 
-// Screenshots arrive as data URLs inside JSON bodies → generous but bounded limit.
 app.use(express.json({ limit: `${config.maxInlineImageMb * 4 + 2}mb` }));
 app.use('/api', apiLimiter);
 
-// ---- API routes ----------------------------------------------------------------
 app.use('/api/chat', chatRouter);
 app.use('/api/write', writeRouter);
 app.use('/api/conversations', conversationsRouter);
@@ -65,7 +61,6 @@ app.use('/api/transcribe', voiceRouter);
 app.use('/api', systemRouter);
 app.use('/api', notFoundApi);
 
-// ---- static client (production build) -------------------------------------------
 if (fs.existsSync(config.clientDist)) {
   app.use(express.static(config.clientDist, { maxAge: '1h', index: false }));
   app.get(/^(?!\/api\/).*/, (_req, res) => {
@@ -74,7 +69,6 @@ if (fs.existsSync(config.clientDist)) {
   });
 }
 
-// ---- errors ----------------------------------------------------------------------
 app.use(errorHandler);
 
 const provider = getProvider();
@@ -88,21 +82,15 @@ const server = app.listen(config.port, config.host, () => {
   }
 });
 
-// Graceful shutdown: stop accepting connections, drain, then close SQLite cleanly
-// so renders/restarts never see a dirty WAL or half-written rows.
 function shutdown(signal) {
   console.log(`[prism] ${signal} received — shutting down gracefully.`);
   server.close(() => {
     try {
-      // better-sqlite3 closes on process exit, but an explicit close flushes WAL.
-      // store exposes the underlying db via a dedicated closer to avoid deep imports.
       store.close?.();
     } catch {
-      /* already closed or not exposed */
     }
     process.exit(0);
   });
-  // Hard deadline in case a connection refuses to drain.
   setTimeout(() => process.exit(0), 5000).unref();
 }
 

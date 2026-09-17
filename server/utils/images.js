@@ -1,7 +1,6 @@
 import sharp from 'sharp';
 import config from '../config.js';
 
-/** Max dimension accepted by most VL models; keeps payloads small and fast. */
 const MAX_EDGE = 1568;
 const DATA_URL_RE = /^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=\s]+)$/;
 
@@ -14,14 +13,13 @@ export class ImageValidationError extends Error {
   }
 }
 
-/** Normalize an image buffer for a vision model: cap dimensions, JPEG/PNG encoding. */
 export async function normalizeImageBuffer(input) {
   const image = sharp(input, { failOn: 'error' });
   const meta = await image.metadata();
   if (!meta.width || !meta.height) throw new ImageValidationError('Unreadable image.');
 
   const needsResize = meta.width > MAX_EDGE || meta.height > MAX_EDGE;
-  let pipeline = image.rotate(); // respect EXIF orientation
+  let pipeline = image.rotate();
   if (needsResize) pipeline = pipeline.resize({ width: MAX_EDGE, height: MAX_EDGE, fit: 'inside' });
 
   const hasAlpha = Boolean(meta.hasAlpha);
@@ -42,7 +40,6 @@ export function toDataUrl(buffer, mime) {
   return `data:${mime};base64,${buffer.toString('base64')}`;
 }
 
-/** Validate and decode a client-supplied data URL into a buffer + mime. */
 export function decodeDataUrl(dataUrl) {
   if (typeof dataUrl !== 'string' || dataUrl.length < 64) {
     throw new ImageValidationError('Malformed image payload.');

@@ -2,17 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Floating bubble + panel over other apps -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <!-- Foreground service powering the overlay -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
-    <!-- Service status notification -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- The panel loads the Prism web app -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Voice input ("Prism hears you") — asked at runtime too -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
@@ -34,7 +29,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Transparent trampoline: hosts the MediaProjection consent dialog -->
         <activity
             android:name=".CapturePermissionActivity"
             android:exported="false"

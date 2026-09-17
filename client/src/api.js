@@ -1,4 +1,3 @@
-/** Thin API client. All AI traffic goes through our backend — no keys here. */
 
 async function jsonFetch(path, options = {}) {
   const res = await fetch(path, {
@@ -18,7 +17,6 @@ async function jsonFetch(path, options = {}) {
 export const api = {
   getConfig: () => jsonFetch('/api/config'),
 
-  /** Arc-style writing tools: [{id,label,hint}] and one-shot rewrites. */
   listWriteStyles: () => jsonFetch('/api/write/styles'),
   write: (text, style) =>
     jsonFetch('/api/write', { method: 'POST', body: JSON.stringify({ text, style }) }),
@@ -60,14 +58,6 @@ export const api = {
   wipeData: () => jsonFetch('/api/privacy/data', { method: 'DELETE' }),
 };
 
-/**
- * Stream a chat turn over SSE. Handlers receive typed events:
- *   onMeta(meta) onDelta(deltaText) onNotice(text) onError({code,message}) onDone(done)
- * Returns an AbortController so the UI can cancel.
- * @param {object} payload  JSON body
- * @param {object} handlers typed event callbacks
- * @param {string} path  endpoint, default '/api/chat'
- */
 export function streamChat(payload, handlers = {}, path = '/api/chat') {
   const controller = new AbortController();
 
@@ -94,7 +84,7 @@ export function streamChat(payload, handlers = {}, path = '/api/chat') {
         const data = await res.json();
         if (data?.error?.message) message = data.error.message;
         if (data?.error?.code) code = data.error.code;
-      } catch { /* keep defaults */ }
+      } catch {  }
       handlers.onError?.({ code, message });
       return;
     }
@@ -149,10 +139,6 @@ export function streamChat(payload, handlers = {}, path = '/api/chat') {
   return controller;
 }
 
-/**
- * Regenerate the most recent assistant reply in a conversation.
- * Same handler shape as streamChat; hits POST /api/chat/regenerate.
- */
 export function regenerateChat(conversationId, handlers = {}, model = null) {
   return streamChat({ conversationId, model: model || null }, handlers, '/api/chat/regenerate');
 }

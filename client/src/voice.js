@@ -1,10 +1,3 @@
-/**
- * Voice for Prism.
- *
- *  Ears:  getUserMedia + MediaRecorder → POST /api/transcribe → text.
- *  Mouth: window.speechSynthesis speaks the answer (markdown-aware: code
- *         blocks are summarized, not spelled character-by-character).
- */
 
 export function voiceSupported() {
   return Boolean(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
@@ -46,7 +39,6 @@ export class VoiceRecorder {
     return this;
   }
 
-  /** Stops and returns { blob, mime }; the blob is never sent until asked. */
   stop() {
     return new Promise((resolve) => {
       const rec = this.#recorder;
@@ -64,7 +56,7 @@ export class VoiceRecorder {
 
   cancel() {
     this.#chunks = [];
-    try { this.#recorder?.stop(); } catch { /* already stopped */ }
+    try { this.#recorder?.stop(); } catch {  }
     this.#cleanup();
   }
 
@@ -75,7 +67,6 @@ export class VoiceRecorder {
   }
 }
 
-/** Send recorded audio to the backend STT endpoint. */
 export async function transcribe(blob, mime) {
   const form = new FormData();
   const ext = mime.includes('mp4') ? 'm4a' : mime.includes('ogg') ? 'ogg' : 'webm';
@@ -90,9 +81,7 @@ export async function transcribe(blob, mime) {
   return (data.text ?? '').trim();
 }
 
-// ------------------------------- speaking ------------------------------------
 
-/** Reduce markdown to clean speakable text; code blocks become summaries. */
 export function stripForSpeech(markdown) {
   let text = String(markdown ?? '');
   text = text.replace(/```([a-zA-Z0-9_+-]*)\n([\s\S]*?)```/g, (_m, lang, body) => {

@@ -1,11 +1,3 @@
-/**
- * End-to-end smoke test: boots the real server (mock AI provider) and walks
- * the full product surface over HTTP — conversations, streaming chat (SSE),
- * uploads + attachment context, screenshots, search, privacy, validation,
- * rate limiting, and error handling.
- *
- * Run: AI_PROVIDER=mock node server/tests/smoke.test.mjs  (or `npm test`)
- */
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -36,18 +28,16 @@ async function waitForServer(timeoutMs = 30000) {
     try {
       const res = await fetch(`${BASE}/api/health`);
       if (res.ok) return;
-    } catch { /* not up yet */ }
+    } catch {  }
     await delay(250);
   }
   throw new Error('server did not start');
 }
 
-/** Consume the SSE stream of POST /api/chat and collect typed events. */
 async function chatStream(payload) {
   return sseCollect(`${BASE}/api/chat`, payload);
 }
 
-/** Same collector, pointed at POST /api/chat/regenerate. */
 async function regenStream(payload) {
   return sseCollect(`${BASE}/api/chat/regenerate`, payload);
 }
@@ -84,7 +74,6 @@ async function sseCollect(url, payload) {
   return events;
 }
 
-// tiny valid PNG (1×1) and a text file for uploads
 const TINY_PNG_DATAURL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
@@ -98,7 +87,6 @@ async function main() {
   try {
     await waitForServer();
 
-    // ---- health & config ----
     console.log('• health & config');
     const health = await (await fetch(`${BASE}/api/health`)).json();
     assert(health.ok && health.provider === 'mock' && health.providerReady, 'GET /api/health reports mock provider ready');
@@ -107,7 +95,6 @@ async function main() {
     assert(!JSON.stringify(cfg).includes('apiKey'), 'config response contains no API key material');
     assert(Array.isArray(cfg.tools) && cfg.tools.length === 4, 'config lists the 4 code actions');
 
-    // ---- conversations CRUD ----
     console.log('• conversations CRUD');
     let res = await fetch(`${BASE}/api/conversations`, { method: 'POST', body: '{}' });
     const { conversation } = await res.json();
@@ -119,7 +106,6 @@ async function main() {
     });
     assert((await res.json()).conversation.title === 'My refactor thread', 'PATCH renames conversation');
 
-    // ---- streaming chat (new conversation via chat endpoint) ----
     console.log('• streaming chat over SSE');
     const s1 = await chatStream({ content: 'Can you help me with this error in my node app?' });
     assert(s1.status === 200, 'chat endpoint responds 200 with SSE');
@@ -130,7 +116,6 @@ async function main() {
     assert(s1.meta.length >= 1 && s1.meta[0].provider === 'mock', 'meta event announces provider/model');
     const cid = s1.done.conversationId;
 
-    // ---- history persistence + memory window ----
     console.log('• persistence & memory');
     const got = await (await fetch(`${BASE}/api/conversations/${cid}`)).json();
     assert(got.messages.length === 2, 'user + assistant messages persisted');
@@ -138,7 +123,6 @@ async function main() {
     const s2 = await chatStream({ conversationId: cid, content: 'Now convert that to TypeScript please' });
     assert(s2.done && !s2.errors.length, 'follow-up turn in same conversation works (memory window used)');
 
-    // ---- uploads: code file → attachment context ----
     console.log('• file upload + attachment context');
     const form = new FormData();
     form.append('files', new Blob(['export function add(a, b) {\n  return a + b;\n}\n'], { type: 'text/plain' }), 'math.js');
@@ -149,7 +133,6 @@ async function main() {
     const s3 = await chatStream({ conversationId: cid, content: 'What does this function do?', attachmentIds: [att.id] });
     assert(s3.done && s3.deltas.join('').length > 50, 'chat with attachment context streams fine');
 
-    // ---- uploads: rejection of secrets + unknown types ----
     console.log('• upload validation');
     const bad1 = new FormData();
     bad1.append('files', new Blob(['SECRET=1']), '.env');
@@ -160,7 +143,6 @@ async function main() {
     const badUp2 = await (await fetch(`${BASE}/api/uploads`, { method: 'POST', body: bad2 })).json();
     assert(badUp2.rejected?.length === 1 && badUp2.rejected[0].reason.includes('unsupported'), 'executable uploads rejected');
 
-    // ---- screenshot (vision path through mock provider) ----
     console.log('• screenshot / vision pipeline');
     const s4 = await chatStream({ conversationId: cid, content: 'What is on my screen?', screenshots: [TINY_PNG_DATAURL] });
     assert(!s4.errors.length && s4.done, 'screenshot turn completes');
@@ -168,14 +150,12 @@ async function main() {
     const badImg = await chatStream({ content: 'look', screenshots: ['data:text/plain;base64,aGVsbG8='] });
     assert(badImg.errors.some((e) => e.code === 'INVALID_IMAGE'), 'invalid screenshot payload rejected with INVALID_IMAGE');
 
-    // ---- code actions (tool system) ----
     console.log('• Explain / Fix / Improve / Generate actions');
     const s5 = await chatStream({ conversationId: cid, action: 'fix', selection: 'const x = y + 1' });
     assert(s5.done && !s5.errors.length, 'Fix action with selected code completes');
     const s6 = await chatStream({ conversationId: cid, action: 'bogus' });
     assert(s6.errors.some((e) => e.code === 'UNKNOWN_ACTION'), 'unknown action rejected cleanly');
 
-    // ---- regenerate ----
     console.log('• regenerate');
     const before = await (await fetch(`${BASE}/api/conversations/${cid}`)).json();
     const assistantCount = before.messages.filter((m) => m.role === 'assistant').length;
@@ -190,12 +170,10 @@ async function main() {
     const regNone = await regenStream({ conversationId: 'missing-id' });
     assert(regNone.errors.some((e) => e.code === 'NOT_FOUND') || regNone.status === 404, 'regenerate for a missing conversation is a 404');
 
-    // ---- search ----
     console.log('• conversation search');
     const search = await (await fetch(`${BASE}/api/conversations?query=${encodeURIComponent('TypeScript')}`)).json();
     assert(search.conversations.length >= 1, 'search finds conversations by message content');
 
-    // ---- voice transcription (mock STT provider) ----
     console.log('• voice transcription');
     const audioForm = new FormData();
     audioForm.append('audio', new Blob([Buffer.from('RIFF....WAVEfmt fake-audio-bytes')], { type: 'audio/webm' }), 'voice.webm');
@@ -207,7 +185,6 @@ async function main() {
     const cfg2 = await (await fetch(`${BASE}/api/config`)).json();
     assert(cfg2.voice?.stt === true, 'config advertises STT capability');
 
-    // ---- writing tools (Arc-style, single source of truth) ----
     console.log('• writing tools');
     const stylesRes = await fetch(`${BASE}/api/write/styles`);
     const stylesJson = await stylesRes.json();
@@ -248,26 +225,21 @@ async function main() {
     });
     assert(wrTooLong.status === 400, 'over-long instruction is a structured 400');
 
-    // ---- privacy export ----
     console.log('• privacy');
     const exported = await (await fetch(`${BASE}/api/privacy/export`)).json();
     assert(exported.conversations.length >= 1 && exported.conversations[0].messages.length >= 2, 'privacy export contains full history');
 
-    // ---- empty message rejected ----
     const emptyTurn = await chatStream({ content: '' });
     assert(emptyTurn.errors.some((e) => e.code === 'EMPTY_MESSAGE'), 'empty messages rejected');
 
-    // ---- rate limit headers present ----
     res = await fetch(`${BASE}/api/health`);
     assert(Boolean(res.headers.get('ratelimit-limit')), 'rate limiting is active (RateLimit-* headers present)');
 
-    // ---- delete conversation ----
     res = await fetch(`${BASE}/api/conversations/${cid}`, { method: 'DELETE' });
     assert(res.status === 200, 'conversation deleted');
     const gone = await fetch(`${BASE}/api/conversations/${cid}`);
     assert(gone.status === 404, 'deleted conversation is 404');
 
-    // ---- 404 for unknown API ----
     res = await fetch(`${BASE}/api/nope`);
     assert(res.status === 404, 'unknown API routes return structured 404');
   } finally {

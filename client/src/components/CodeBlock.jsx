@@ -1,6 +1,5 @@
 import { useState, isValidElement, Children } from 'react';
 
-/** Extract raw text from a (possibly highlighted) React node tree. */
 function extractText(node) {
   if (node == null || typeof node === 'boolean') return '';
   if (typeof node === 'string' || typeof node === 'number') return String(node);

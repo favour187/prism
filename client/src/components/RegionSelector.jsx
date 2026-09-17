@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 
-/**
- * Full-viewport drag-to-select region picker over a captured frame.
- * Returns a cropped PNG data URL via onDone, or no crop via onCancel.
- */
 export default function RegionSelector({ frame, onDone, onCancel }) {
   const overlayRef = useRef(null);
   const imgRef = useRef(null);
@@ -30,7 +26,6 @@ export default function RegionSelector({ frame, onDone, onCancel }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onCancel, box, drag]);
 
   const commit = () => {
@@ -38,8 +33,6 @@ export default function RegionSelector({ frame, onDone, onCancel }) {
     if (!d) return;
     const { x, y, w, h } = toRect(d);
     if (w < 8 || h < 8) return onCancel();
-    // Map overlay coords → image pixels, accounting for object-fit: contain.
-    // Prefer the image's natural size (Android bridge doesn't pass dimensions).
     const iw = natural.w || frame.width || imgRef.current?.naturalWidth;
     const ih = natural.h || frame.height || imgRef.current?.naturalHeight;
     if (!iw || !ih) return onCancel();

@@ -1,11 +1,3 @@
-/**
- * Tool system: engineered code-action prompts.
- *
- * These are the "Explain / Fix / Improve / Generate" capabilities expressed as
- * a registry so new tools can be added without touching the chat pipeline.
- * The frontend sends { action, selection } and the orchestrator merges the
- * rendered tool prompt into the user's turn.
- */
 
 function withSelection(body, selection) {
   const sel = (selection ?? '').trim();

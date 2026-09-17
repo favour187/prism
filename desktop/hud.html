@@ -40,7 +40,6 @@
     document.body.appendChild(el);
 
     const hud = window.prismHud;
-    // click vs drag: >6px of movement counts as a drag, not a click
     let downY = null, dragged = false;
     el.addEventListener('mousedown', (e) => { downY = e.screenY; dragged = false; e.preventDefault(); });
     window.addEventListener('mousemove', (e) => {

@@ -16,14 +16,12 @@ const config = {
   dataDir: process.env.DATA_DIR ?? path.join(__dirname, 'data'),
   clientDist: process.env.CLIENT_DIST ?? path.join(__dirname, '..', 'client', 'dist'),
 
-  // --- AI provider configuration (server-side only, never shipped to client) ---
-  aiProvider: (process.env.AI_PROVIDER ?? 'featherless').toLowerCase(), // 'featherless' | 'mock'
+  aiProvider: (process.env.AI_PROVIDER ?? 'featherless').toLowerCase(),
   featherless: {
     apiKey: process.env.FEATHERLESS_API_KEY ?? '',
     baseUrl: (process.env.FEATHERLESS_BASE_URL ?? 'https://api.featherless.ai/v1').replace(/\/$/, ''),
     chatModel: process.env.FEATHERLESS_CHAT_MODEL ?? 'Qwen/Qwen2.5-Coder-32B-Instruct',
     visionModel: process.env.FEATHERLESS_VISION_MODEL ?? 'Qwen/Qwen2.5-VL-72B-Instruct',
-    // Speech-to-text: any OpenAI-compatible /audio/transcriptions endpoint.
     sttModel: process.env.FEATHERLESS_STT_MODEL ?? 'openai/whisper-large-v3',
     sttBaseUrl: (process.env.FEATHERLESS_STT_BASE_URL ?? '').replace(/\/$/, '') || null,
     timeoutMs: num(process.env.FEATHERLESS_TIMEOUT_MS, 120_000),
@@ -33,12 +31,11 @@ const config = {
       : 0.6,
   },
 
-  // --- Limits / safety ---
   maxUploadMb: num(process.env.MAX_UPLOAD_MB, 12),
   maxUploadFiles: num(process.env.MAX_UPLOAD_FILES, 6),
   maxInlineImageMb: num(process.env.MAX_INLINE_IMAGE_MB, 9),
   maxAudioMb: num(process.env.MAX_AUDIO_MB, 15),
-  historyMessages: num(process.env.HISTORY_MESSAGES, 24),        // conversation memory window
+  historyMessages: num(process.env.HISTORY_MESSAGES, 24),
   maxContextFilesChars: num(process.env.MAX_CONTEXT_FILES_CHARS, 180_000),
   maxFileChars: num(process.env.MAX_FILE_CHARS, 40_000),
   rateLimit: {
@@ -48,7 +45,6 @@ const config = {
     uploadMax: num(process.env.RATE_LIMIT_UPLOAD_MAX, 60),
   },
 
-  // Optional comma-separated extra CORS origins for a separately hosted frontend.
   corsOrigins: (process.env.CORS_ORIGINS ?? '')
     .split(',')
     .map((s) => s.trim())

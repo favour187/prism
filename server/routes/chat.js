@@ -5,20 +5,6 @@ import store from '../memory/store.js';
 
 const router = Router();
 
-/**
- * POST /api/chat — streaming chat turn.
- *
- * Body: {
- *   conversationId?: string,
- *   content?: string,
- *   attachmentIds?: string[],
- *   screenshots?: string[] (data URLs),
- *   action?: 'explain'|'fix'|'improve'|'generate',
- *   selection?: string,
- *   model?: string
- * }
- * Response: text/event-stream with events meta | delta | notice | done | error.
- */
 router.post('/', chatLimiter, async (req, res) => {
   const {
     conversationId = null,
@@ -43,15 +29,6 @@ router.post('/', chatLimiter, async (req, res) => {
   );
 });
 
-/**
- * POST /api/chat/regenerate — re-answer the last user question in a conversation.
- *
- * Body: { conversationId: string, model?: string }
- *
- * Deletes the most recent assistant reply first, then re-streams an answer from
- * the same on-server context (memory window now ends in the original question).
- * Same SSE shape as /api/chat.
- */
 router.post('/regenerate', chatLimiter, async (req, res) => {
   const { conversationId = null, model = null } = req.body ?? {};
   if (typeof conversationId !== 'string' || !conversationId) {
@@ -64,8 +41,6 @@ router.post('/regenerate', chatLimiter, async (req, res) => {
     return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Conversation not found.' } });
   }
 
-  // There must be a user turn to re-answer (the assistant reply we delete is
-  // restored by the streaming pipeline when it persists the new answer).
   const last = store.getLastMessage(conversationId, 'user');
   if (!last) {
     return res.status(400).json({
@@ -80,12 +55,6 @@ router.post('/regenerate', chatLimiter, async (req, res) => {
   );
 });
 
-/**
- * Shared SSE plumbing: write the event-stream headers, forward every typed
- * orchestration event, keep a heartbeat, and cleanly error out.
- * @param {import('express').Response} res
- * @param {() => AsyncGenerator} turnFactory  returns the event generator
- */
 function streamTurn(res, turnFactory) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',

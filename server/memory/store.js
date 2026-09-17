@@ -49,7 +49,6 @@ const id = () => crypto.randomUUID();
 const now = () => Date.now();
 
 export const store = {
-  // ------------------------------ conversations ------------------------------
   createConversation({ title = 'New conversation', model = null } = {}) {
     const cid = id();
     db.prepare(
@@ -99,7 +98,6 @@ export const store = {
     }
   },
 
-  // --------------------------------- messages ---------------------------------
   addMessage({ conversationId, role, content, attachments = [], meta = {} }) {
     const mid = id();
     db.prepare(
@@ -144,7 +142,6 @@ export const store = {
     return { ...row, attachments: safeJson(row.attachments, []), meta: safeJson(row.meta, {}) };
   },
 
-  /** Remove the most recent assistant reply (used by Regenerate). Returns the deleted row or null. */
   deleteLastAssistantMessage(conversationId) {
     const row = db
       .prepare(
@@ -157,7 +154,6 @@ export const store = {
     return row;
   },
 
-  // -------------------------------- attachments -------------------------------
   addAttachment({ conversationId = null, name, mime, kind, size, filePath, extractedText = null, truncated = 0 }) {
     const aid = id();
     db.prepare(
@@ -206,7 +202,6 @@ export const store = {
     }
   },
 
-  // ---------------------------------- privacy ---------------------------------
   exportAll() {
     const conversations = this.listConversations({ limit: 10000 });
     return {
@@ -231,13 +226,11 @@ export const store = {
     for (const p of paths) fs.rm(p.path, { force: true }, () => {});
   },
 
-  /** Flush and close the SQLite database (used on graceful shutdown). */
   close() {
     try {
       db.pragma('wal_checkpoint(TRUNCATE)');
       db.close();
     } catch {
-      /* already closed */
     }
   },
 };

@@ -3,7 +3,6 @@ import store from '../memory/store.js';
 
 const router = Router();
 
-/** GET /api/conversations?query= — list + full-text-ish search over titles & messages. */
 router.get('/', (req, res, next) => {
   try {
     const items = store.listConversations({ query: String(req.query.query ?? ''), limit: 300 });
@@ -13,7 +12,6 @@ router.get('/', (req, res, next) => {
   }
 });
 
-/** POST /api/conversations — create empty conversation. */
 router.post('/', (req, res, next) => {
   try {
     const convo = store.createConversation({ title: 'New conversation' });
@@ -23,7 +21,6 @@ router.post('/', (req, res, next) => {
   }
 });
 
-/** GET /api/conversations/:id — conversation + full message history. */
 router.get('/:id', (req, res, next) => {
   try {
     const convo = store.getConversation(req.params.id);
@@ -44,7 +41,6 @@ router.get('/:id', (req, res, next) => {
   }
 });
 
-/** PATCH /api/conversations/:id — rename. */
 router.patch('/:id', (req, res, next) => {
   try {
     const title = String(req.body?.title ?? '').trim().slice(0, 120);
@@ -61,7 +57,6 @@ router.patch('/:id', (req, res, next) => {
   }
 });
 
-/** DELETE /api/conversations/:id */
 router.delete('/:id', (req, res, next) => {
   try {
     if (!store.getConversation(req.params.id)) {

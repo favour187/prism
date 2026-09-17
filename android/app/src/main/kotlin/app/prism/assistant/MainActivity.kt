@@ -20,10 +20,6 @@ import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
-/**
- * Landing screen: wire the overlay permission, set the Prism server, and
- * start the floating assistant service.
- */
 class MainActivity : Activity() {
 
     private lateinit var overlayBtn: Button

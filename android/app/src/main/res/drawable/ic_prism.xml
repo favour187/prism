@@ -4,7 +4,6 @@
     android:height="48dp"
     android:viewportWidth="48"
     android:viewportHeight="48">
-    <!-- Prism mark: a faceted gem -->
     <path
         android:fillColor="#FFFFFF"
         android:pathData="M24,3 L43,15.5 L43,32.5 L24,45 L5,32.5 L5,15.5 Z" />

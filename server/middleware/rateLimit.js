@@ -7,7 +7,6 @@ const json429 = (res, _req, next, options) => {
   });
 };
 
-/** General API limiter. */
 export const apiLimiter = rateLimit({
   windowMs: config.rateLimit.windowMs,
   max: config.rateLimit.apiMax,
@@ -16,7 +15,6 @@ export const apiLimiter = rateLimit({
   handler: json429,
 });
 
-/** Stricter limiter for model-backed endpoints (they cost money/tokens). */
 export const chatLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: config.rateLimit.chatMax,

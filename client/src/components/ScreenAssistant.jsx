@@ -2,19 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { grabFrame, ScreenWatcher } from '../capture.js';
 import RegionSelector from './RegionSelector.jsx';
 
-/**
- * Screen assistant (web app mode).
- *
- * Toggled by a thin EDGE LINE on the right edge of the window — no floating
- * circle, no hotkey required. Nothing is recorded: a frame is captured only
- * on an explicit click, or — in Watch mode — kept only when the screen
- * visibly moves, with optional one-line AI narration into the chat.
- */
 export default function ScreenAssistant({ open, onToggle, onClose, onCapture, onError, onWatchNarrate, streaming }) {
-  const [busy, setBusy] = useState(null); // 'full' | 'window' | 'region'
+  const [busy, setBusy] = useState(null);
   const [preview, setPreview] = useState(null);
   const [awaitingRegion, setAwaitingRegion] = useState(null);
-  const [watch, setWatch] = useState(null); // { count }
+  const [watch, setWatch] = useState(null);
   const [narrate, setNarrate] = useState(() => localStorage.getItem('prism.watchNarrate') !== '0');
   const watcherRef = useRef(null);
   const narrateRef = useRef(narrate);
@@ -64,7 +56,6 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
 
   useEffect(() => {
     if (!open) { setPreview(null); setAwaitingRegion(null); setBusy(null); stopWatch(); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const capture = async (mode) => {
@@ -94,7 +85,6 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
   };
 
   if (!open && !awaitingRegion) {
-    // The closed state is just the edge line.
     return (
       <button
         className="assistant-edge"
@@ -180,7 +170,7 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
         </section>
       )}
 
-      {/* Edge line toggle — a straight line at the window edge, always clickable */}
+      {}
       <button
         className={`assistant-edge ${open ? 'open' : ''}`}
         onClick={onToggle}

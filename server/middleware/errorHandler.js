@@ -1,7 +1,3 @@
-/**
- * Central error middleware: every failure becomes a structured JSON envelope.
- */
-// eslint-disable-next-line no-unused-vars
 export function errorHandler(err, req, res, _next) {
   const status = Number.isInteger(err?.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
   const code = err?.code ?? (status === 500 ? 'INTERNAL_ERROR' : 'REQUEST_ERROR');

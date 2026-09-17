@@ -5,11 +5,6 @@ import { chatLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
 
-/**
- * Arc-style writing tools — single source of truth for styles & prompts.
- * Used by the overlay command bar (inline rewrite) and the desktop
- * global "rewrite selection" bar (⌘/Ctrl+Shift+R).
- */
 export const WRITE_STYLES = [
   { id: 'fix', label: 'Fix grammar', hint: 'corrects spelling & grammar, keeps your voice' },
   { id: 'improve', label: 'Improve', hint: 'same meaning, sharper writing' },
@@ -35,18 +30,10 @@ const PROMPTS = {
 const MAX_TEXT_CHARS = 20_000;
 const MAX_INSTRUCTION_CHARS = 500;
 
-/** GET /api/write/styles — what the bar renders. */
 router.get('/styles', (_req, res) => {
   res.json({ styles: WRITE_STYLES.map(({ id, label, hint }) => ({ id, label, hint })) });
 });
 
-/**
- * POST /api/write
- * Body: { text: string, style?: 'fix'|'improve'|..., instruction?: string }
- *  — style applies a preset transform; instruction is a free-form directive
- *    ("turn this into a polite rejection email"). Exactly one is required.
- * → 200 { result, style, model, provider }
- */
 router.post('/', chatLimiter, async (req, res, next) => {
   try {
     const { text = '', style = null, instruction = null } = req.body ?? {};

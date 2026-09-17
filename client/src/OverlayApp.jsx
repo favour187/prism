@@ -16,7 +16,6 @@ const SIZE_PRESETS = [
   { key: 'L', w: 620, h: 840 },
 ];
 
-// Rendered instantly; refreshed from /api/write/styles (single source of truth).
 const FALLBACK_STYLES = [
   { id: 'fix', label: 'Fix grammar' },
   { id: 'improve', label: 'Improve' },
@@ -32,12 +31,6 @@ const WATCH_NARRATION_PROMPT =
   'Watch narration: in ONE short sentence, describe what visibly changed on the screen. ' +
   'Be concrete — name the app, dialog, or content that changed. No preamble.';
 
-/**
- * Universal command bar — the Arc-style experience.
- * One input: '/' opens the command palette (watch, captures, voice…);
- * typed text surfaces inline write-style chips that transform it in place;
- * Enter asks; ⌘⇧R/G/W work system-wide from any app.
- */
 export default function OverlayApp() {
   const [messages, setMessages] = useState([]);
   const [stream, setStream] = useState(null);
@@ -51,11 +44,11 @@ export default function OverlayApp() {
   const [cfg, setCfg] = useState(null);
   const [mic, setMic] = useState('idle');
   const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('prism.autospeak') !== '0');
-  const [watch, setWatch] = useState(null); // {count, sensitivity}
+  const [watch, setWatch] = useState(null);
   const [narrate, setNarrate] = useState(() => localStorage.getItem('prism.watchNarrate') !== '0');
   const [styles, setStyles] = useState(FALLBACK_STYLES);
-  const [styleBusy, setStyleBusy] = useState(null); // style id currently transforming
-  const [writeState, setWriteState] = useState(null); // { original } after in-place transform
+  const [styleBusy, setStyleBusy] = useState(null);
+  const [writeState, setWriteState] = useState(null);
   const [sizeMenu, setSizeMenu] = useState(false);
   const [dims, setDims] = useState({ w: window.innerWidth, h: window.innerHeight });
   const [palIndex, setPalIndex] = useState(0);
@@ -97,7 +90,6 @@ export default function OverlayApp() {
           setConversationId(null);
         });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -108,7 +100,6 @@ export default function OverlayApp() {
     localStorage.setItem('prism.autospeak', autoSpeak ? '1' : '0');
   }, [autoSpeak]);
 
-  // ------------------------------- window size --------------------------------
   useEffect(() => {
     const onResize = () => setDims({ w: window.innerWidth, h: window.innerHeight });
     window.addEventListener('resize', onResize);
@@ -164,22 +155,15 @@ export default function OverlayApp() {
     setShots((prev) => [...prev.slice(-3), { id: `shot-${Date.now()}-${shotSeq}`, dataUrl, name }]);
   }, []);
 
-  // ------------------------------ watch: stop ---------------------------------
   const stopWatch = useCallback(() => {
     watcherRef.current?.stop();
     watcherRef.current = null;
     setWatch(null);
   }, []);
 
-  // -------------------------------- sending ---------------------------------
 
-  /**
-   * One pipeline for every assistant turn.
-   * options.auto: background turn (narration) — keeps the user's draft & watch running.
-   * options.screenshots / userPreview: override payload images / shown user message.
-   */
   const sendContent = useCallback((content, { auto = false, screenshots = null, userPreview = null } = {}) => {
-    if (streamRef.current) return; // one turn at a time; narration yields to the user
+    if (streamRef.current) return;
     stopSpeaking();
     if (!auto) stopWatch();
     streamTextRef.current = '';
@@ -229,7 +213,7 @@ export default function OverlayApp() {
             try {
               const data = await api.getConversation(done.conversationId);
               setMessages(data.messages);
-            } catch { /* keep optimistic view */ }
+            } catch {  }
           }
           if (autoSpeak && finalText && ttsSupported()) {
             speak(finalText).catch(() => {});
@@ -239,7 +223,6 @@ export default function OverlayApp() {
     );
   }, [shots, conversationId, flash, autoSpeak, stopWatch]);
 
-  // ------------------------------- watch mode ---------------------------------
   const toggleWatch = useCallback(async (sensitivity = watch?.sensitivity ?? 'medium') => {
     if (watcherRef.current) {
       const n = watch?.count ?? 0;
@@ -280,7 +263,6 @@ export default function OverlayApp() {
 
   useEffect(() => () => watcherRef.current?.stop(), []);
 
-  // ------------------------------- capture ---------------------------------
   const captureScreen = useCallback(async () => {
     setBusy('screen');
     try {
@@ -343,7 +325,6 @@ export default function OverlayApp() {
     }
   }, [addShot, flash]);
 
-  // --------------------------------- voice ----------------------------------
   const toggleMic = useCallback(async () => {
     if (mic === 'recording') {
       setMic('transcribing');
@@ -391,7 +372,6 @@ export default function OverlayApp() {
     localStorage.removeItem('prism.overlayConversationId');
   }, [stopWatch]);
 
-  // ------------------------ global hotkeys (desktop shell) --------------------
   const quickAsk = useCallback((selectionText) => {
     const t = String(selectionText ?? '').trim();
     if (!t) return;
@@ -414,7 +394,6 @@ export default function OverlayApp() {
     return () => { un1?.(); un2?.(); un3?.(); };
   }, []);
 
-  // ---------------------------- command palette ------------------------------
   const paletteOpen = text.startsWith('/');
   const commands = useMemo(() => {
     const list = [
@@ -445,7 +424,6 @@ export default function OverlayApp() {
     setPalIndex(0);
   }, [text]);
 
-  // ------------------------------ inline write -------------------------------
   const writeChipsOpen = Boolean(text.trim()) && !paletteOpen && !stream;
   const transformed = writeState && text !== writeState.original;
 
@@ -479,7 +457,6 @@ export default function OverlayApp() {
     setWriteState(null);
   }, [text, flash]);
 
-  // ---------------------------------- send -----------------------------------
   const canSend = !stream && (text.trim() || shots.length > 0);
 
   const send = useCallback(() => {
@@ -639,7 +616,7 @@ export default function OverlayApp() {
       )}
 
       <footer className="ov-composer" onClick={() => sizeMenu && setSizeMenu(false)}>
-        {/* command palette */}
+        {}
         {paletteOpen && (
           <div className="ov-palette" role="listbox" aria-label="Commands">
             {commands.map((c, i) => (
@@ -658,7 +635,7 @@ export default function OverlayApp() {
           </div>
         )}
 
-        {/* size presets */}
+        {}
         {sizeMenu && (
           <div className="ov-pop right" onClick={(e) => e.stopPropagation()}>
             <div className="ov-pop-title">Panel size</div>
@@ -682,7 +659,7 @@ export default function OverlayApp() {
           </div>
         )}
 
-        {/* inline write styles — the Arc moment inside the bar */}
+        {}
         {writeChipsOpen && (
           <div className="ov-chips" onClick={(e) => e.stopPropagation()}>
             {styles.map((s) => (
@@ -700,7 +677,7 @@ export default function OverlayApp() {
           </div>
         )}
 
-        {/* transformed in place — act on it */}
+        {}
         {transformed && !paletteOpen && (
           <div className="ov-bar-actions" onClick={(e) => e.stopPropagation()}>
             <button className="btn primary small" onClick={insertTransformed}>⤓ Insert into app</button>
@@ -716,7 +693,7 @@ export default function OverlayApp() {
           </div>
         )}
 
-        {/* capture row */}
+        {}
         <div className={`ov-capture-row ${android ? 'two' : ''}`}>
           <button className="ov-cap" disabled={Boolean(busy) || Boolean(stream)} onClick={captureScreen} title="Capture the whole screen">
             🖥<span>Screen</span>{busy === 'screen' && <span className="spinner" />}
@@ -731,7 +708,7 @@ export default function OverlayApp() {
           </button>
         </div>
 
-        {/* the bar */}
+        {}
         <div className="ov-input-row">
           {voiceSupported() && (
             <button
@@ -760,7 +737,7 @@ export default function OverlayApp() {
             : <button className="ov-send" onClick={send} disabled={!canSend || paletteOpen} title="Send">➤</button>}
         </div>
 
-        {/* slim status row */}
+        {}
         <div className="ov-slim no-drag" onClick={(e) => e.stopPropagation()}>
           {!android && (
             <button

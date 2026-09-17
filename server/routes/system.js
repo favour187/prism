@@ -6,8 +6,6 @@ import { listTools } from '../tools/codeActions.js';
 
 const router = Router();
 
-// Model lists change rarely; cache them briefly so every open of the web app,
-// overlay panel, Android WebView, and desktop surface doesn't hit the provider.
 let modelsCache = { at: 0, models: [] };
 const MODELS_CACHE_TTL_MS = 10 * 60 * 1000;
 
@@ -19,7 +17,6 @@ async function cachedModels(provider) {
   return models;
 }
 
-/** Liveness + readiness for health checks (Render, uptime monitors). */
 router.get('/health', (_req, res) => {
   const provider = getProvider();
   res.json({
@@ -30,10 +27,6 @@ router.get('/health', (_req, res) => {
   });
 });
 
-/**
- * Public client config — strictly non-secret. The Featherless key never
- * leaves the server; the client only learns if the provider is configured.
- */
 router.get('/config', async (_req, res, next) => {
   try {
     const provider = getProvider();
@@ -55,7 +48,7 @@ router.get('/config', async (_req, res, next) => {
       },
       voice: {
         stt: provider.supportsTranscription(),
-        tts: 'client', // answers are spoken by the client's speech synthesizer
+        tts: 'client',
       },
       privacy: {
         screenRecording: 'opt-in-per-capture',
@@ -67,7 +60,6 @@ router.get('/config', async (_req, res, next) => {
   }
 });
 
-/** GET /api/privacy/export — everything stored about the user, as JSON. */
 router.get('/privacy/export', (_req, res, next) => {
   try {
     const data = store.exportAll();
@@ -78,7 +70,6 @@ router.get('/privacy/export', (_req, res, next) => {
   }
 });
 
-/** DELETE /api/privacy/data — irreversibly wipe conversations + uploads. */
 router.delete('/privacy/data', (_req, res, next) => {
   try {
     store.wipeAll();

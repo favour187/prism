@@ -1,7 +1,3 @@
-/**
- * Browser-side screen capture via getDisplayMedia — the privacy-safe way:
- * the OS/browser shows its picker; nothing is captured without consent.
- */
 export async function grabFrame() {
   if (!navigator.mediaDevices?.getDisplayMedia) {
     throw new Error('Screen capture is not supported in this browser (use Chrome/Edge/Firefox desktop).');
@@ -40,7 +36,6 @@ async function frameFromStream(stream, settleMs = 150) {
   return { dataUrl: frameCanvas(video, w, h).toDataURL('image/png'), width: w, height: h };
 }
 
-/** Open a live capture stream (user-consented once) for repeated sampling. */
 export async function openCaptureStream() {
   const stream = await navigator.mediaDevices.getDisplayMedia({
     video: { frameRate: { ideal: 5, max: 12 } },
@@ -59,20 +54,7 @@ export async function openCaptureStream() {
   return { video, track, stop: () => stream.getTracks().forEach((t) => t.stop()) };
 }
 
-/**
- * Watch mode — motion-triggered screenshots.
- *
- * An explicitly user-started session: the screen is sampled every interval,
- * frames are differed LOCALLY (nothing leaves the device except the kept
- * screenshot), and a screenshot is only produced when the visible change
- * exceeds the sensitivity threshold. Frames with no movement are discarded
- * immediately — this is precisely not continuous recording.
- */
 export class ScreenWatcher {
-  /**
-   * intervalMs sampling period; threshold mean per-pixel luminance delta (0–255);
-   * sample small diff canvas width; maxShots cap per session.
-   */
   constructor({ intervalMs = 900, threshold = 7, sample = 200, maxShots = 24 } = {}) {
     this.intervalMs = intervalMs;
     this.threshold = threshold;
@@ -112,7 +94,6 @@ export class ScreenWatcher {
               jumps,
               n: this.shots,
             });
-            // Re-baseline so each shot captures a NEW movement, not the same one.
             this.prev = data;
           }
         } else {
@@ -136,7 +117,6 @@ export class ScreenWatcher {
   }
 }
 
-/** Mean absolute luminance difference between two ImageData arrays (0–255). */
 function lumDiff(a, b, step = 8) {
   let sum = 0;
   let count = 0;
@@ -149,10 +129,6 @@ function lumDiff(a, b, step = 8) {
   return count ? sum / count : 0;
 }
 
-/**
- * Layout-cell flips on an 8×8 grid: catches structural moves (a window
- * appearing, big scroll jumps) that a diluted mean-delta can miss.
- */
 function layoutJumps(a, b, sw, sh) {
   const GX = 8;
   const GY = 8;
@@ -179,21 +155,14 @@ function layoutJumps(a, b, sw, sh) {
   return jumps;
 }
 
-/** True when running inside the Prism desktop (Electron) shell. */
 export function isDesktop() {
   return Boolean(window.prismDesktop?.isDesktop);
 }
 
-/** True when running inside the Prism Android overlay WebView. */
 export function isAndroid() {
   return typeof window.prismAndroid?.requestCapture === 'function';
 }
 
-/**
- * Ask the Android shell for a screenshot. The native side handles the
- * MediaProjection consent dialog, captures exactly ONE frame, restores the
- * panel, and resolves the promise with a PNG data URL (or null if cancelled).
- */
 export function androidCapture(kind = 'screen') {
   return new Promise((resolve) => {
     const token = `c${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
@@ -208,7 +177,6 @@ export function androidCapture(kind = 'screen') {
   });
 }
 
-// Native → web callback target for androidCapture().
 window.__prismCaptureResult = (token, dataUrl) => {
   const store = window.__prismCaptureResolvers;
   if (store?.[token]) {

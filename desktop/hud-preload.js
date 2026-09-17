@@ -1,6 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-/** Bridge for the always-on-top HUD windows (edge line + circle launcher). */
 contextBridge.exposeInMainWorld('prismHud', {
   toggleOverlay: () => ipcRenderer.send('hud:toggle-overlay'),
   openMainApp: () => ipcRenderer.send('hud:open-main'),
