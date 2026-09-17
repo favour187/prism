@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { grabFrame, ScreenWatcher } from '../capture.js';
 import RegionSelector from './RegionSelector.jsx';
 
-export default function ScreenAssistant({ open, onToggle, onClose, onCapture, onError, onWatchNarrate, streaming }) {
+export default function ScreenAssistant({ open, onToggle, onClose, onCapture, onAnswer, onError, onWatchNarrate, streaming }) {
   const [busy, setBusy] = useState(null);
   const [preview, setPreview] = useState(null);
   const [awaitingRegion, setAwaitingRegion] = useState(null);
@@ -78,6 +78,24 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
     }
   };
 
+  const answerNow = async () => {
+    setBusy('answer');
+    try {
+      const frame = await grabFrame();
+      onAnswer?.(frame.dataUrl);
+      setPreview(null);
+      onClose();
+    } catch (err) {
+      if (err?.name === 'NotAllowedError') {
+        onError('Capture cancelled — permission was not granted.');
+      } else {
+        onError(err.message ?? 'Screen capture failed.');
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const attach = () => {
     onCapture(preview, 'capture.png');
     setPreview(null);
@@ -136,6 +154,14 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
 
             {!preview ? (
               <div className="capture-modes">
+                {onAnswer && (
+                  <button className="capture-mode answer" disabled={Boolean(busy) || Boolean(streaming)} onClick={answerNow}>
+                    <span className="capture-icon">⚡</span>
+                    <span>Answer now</span>
+                    <small>capture screen & answer instantly</small>
+                    {busy === 'answer' && <span className="spinner" />}
+                  </button>
+                )}
                 <button className="capture-mode" disabled={Boolean(busy)} onClick={() => capture('full')}>
                   <span className="capture-icon">🖥</span>
                   <span>Full screen</span>

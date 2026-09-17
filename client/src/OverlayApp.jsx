@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, streamChat } from './api.js';
 import { grabFrame, isAndroid, androidCapture, ScreenWatcher } from './capture.js';
 import { VoiceRecorder, transcribe, speak, stopSpeaking, voiceSupported, ttsSupported } from './voice.js';
+import { SCREEN_ASK_PROMPT } from './prompts.js';
 import RegionSelector from './components/RegionSelector.jsx';
 import MessageList from './components/MessageList.jsx';
 
@@ -30,10 +31,6 @@ const FALLBACK_STYLES = [
 const WATCH_NARRATION_PROMPT =
   'Watch narration: in ONE short sentence, describe what visibly changed on the screen. ' +
   'Be concrete — name the app, dialog, or content that changed. No preamble.';
-
-const SCREEN_ASK_PROMPT =
-  'A screenshot was just captured. Answer immediately: say what is on screen, then give the ' +
-  'most likely needed answer (fix, next step, explanation). Lead with the answer. Be direct and short.';
 
 export default function OverlayApp() {
   const [messages, setMessages] = useState([]);
@@ -362,7 +359,8 @@ export default function OverlayApp() {
         if (!blob) throw new Error('Nothing was recorded.');
         const transcript = await transcribe(blob, mime);
         if (transcript) {
-          setText((t) => (t.trim() ? `${t.trim()} ${transcript}` : transcript));
+          setText(transcript);
+          sendContent(transcript);
         } else {
           flash('Heard silence — try again closer to the mic.');
         }
@@ -387,7 +385,7 @@ export default function OverlayApp() {
           : `Mic unavailable: ${err.message}`,
       );
     }
-  }, [mic, flash]);
+  }, [mic, flash, sendContent]);
 
   const newThread = useCallback(() => {
     abortRef.current?.abort();
@@ -425,7 +423,7 @@ export default function OverlayApp() {
   const paletteOpen = text.startsWith('/');
   const commands = useMemo(() => {
     const list = [
-      { id: 'answer', icon: '⚡', label: 'Answer from my screen', hint: 'capture now and get an instant answer', run: captureAndAsk },
+      { id: 'answer', icon: '⚡', label: 'Answer from my screen', hint: 'reads the screen and answers instantly, no questions', run: captureAndAsk },
       ...(!android ? [{
         id: 'watch', icon: '◉', label: watch ? 'Stop watching' : 'Watch screen',
         hint: 'screenshot only when something moves', run: () => toggleWatch(),
@@ -437,7 +435,7 @@ export default function OverlayApp() {
       { id: 'screen', icon: '🖥', label: 'Screenshot', hint: 'capture the full screen', run: captureScreen },
       ...(!android ? [{ id: 'window', icon: '🪟', label: 'Window', hint: 'capture one app window', run: showWindowPicker }] : []),
       { id: 'region', icon: '✂️', label: 'Region', hint: 'drag-select a part of the screen', run: captureRegion },
-      ...(voiceSupported() ? [{ id: 'voice', icon: '🎤', label: 'Voice', hint: 'dictate into the bar', run: toggleMic }] : []),
+      ...(voiceSupported() ? [{ id: 'voice', icon: '🎤', label: 'Voice', hint: 'speak — transcribes and asks the AI immediately', run: toggleMic }] : []),
       ...(ttsSupported() ? [{
         id: 'speak', icon: autoSpeak ? '🔇' : '🔊', label: `Spoken answers ${autoSpeak ? 'off' : 'on'}`,
         hint: 'read replies aloud', run: () => setAutoSpeak((v) => !v),
@@ -629,9 +627,10 @@ export default function OverlayApp() {
           messages={messages}
           stream={stream}
           onCodeAction={null}
+          onSpeak={ttsSupported()}
           emptyHint={android
             ? `⚡ Tap “Answer” to capture your screen and get a reply in seconds — or just type below.`
-            : `One bar for everything: ⚡ Answer captures your screen and replies instantly · type to ask · / for commands. ${kbd} toggles me anywhere.`}
+            : `One bar for everything: ⚡ Answer reads your screen and replies instantly · talk to ask · / for commands. ${kbd} toggles me anywhere.`}
         />
       </div>
 
@@ -749,12 +748,12 @@ export default function OverlayApp() {
               className={`ov-mic ${mic}`}
               onClick={toggleMic}
               disabled={Boolean(stream) || mic === 'transcribing'}
-              title={mic === 'recording' ? 'Tap to stop & transcribe' : mic === 'transcribing' ? 'Transcribing…' : 'Tap to talk — Prism hears you'}
+              title={mic === 'recording' ? 'Tap to stop — Prism transcribes and answers' : mic === 'transcribing' ? 'Transcribing…' : 'Tap to talk — Prism hears you and answers'}
             >
               {mic === 'recording' ? '⏺' : mic === 'transcribing' ? '…' : '🎤'}
             </button>
           )}
-          {mic === 'recording' && <span className="ov-rec">listening… tap ⏺ to stop</span>}
+          {mic === 'recording' && <span className="ov-rec">listening… tap ⏺ to stop & answer</span>}
           <input
             ref={inputRef}
             className="ov-input"

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, streamChat, regenerateChat } from './api.js';
 import { speak, stopSpeaking, ttsSupported } from './voice.js';
+import { SCREEN_ASK_PROMPT } from './prompts.js';
 import Sidebar from './components/Sidebar.jsx';
 import ChatHeader from './components/ChatHeader.jsx';
 import MessageList from './components/MessageList.jsx';
@@ -136,8 +137,11 @@ export default function App() {
 
   const canSend = useMemo(() => !stream, [stream]);
 
-  const sendMessage = useCallback(({ content }) => {
-    if (!canSend) return;
+  const sendMessage = useCallback(({ content, voice = false }) => {
+    if (!canSend) {
+      if (voice) showToast('Wait for the current answer to finish first.', 'error');
+      return;
+    }
     const trimmed = (content ?? '').trim();
     if (!trimmed && !pendingFiles.length && !pendingScreenshots.length && !pendingAction) return;
     stopSpeaking();
@@ -334,6 +338,63 @@ export default function App() {
     showToast('Screenshot attached — preview is in the composer.', 'success');
   }, [showToast]);
 
+  const onAnswer = useCallback((dataUrl) => {
+    if (stream) {
+      showToast('Wait for the current answer to finish first.', 'error');
+      return;
+    }
+    stopSpeaking();
+    streamTextRef.current = '';
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `local-${Date.now()}-ask`,
+        role: 'user',
+        content: `📸 Screen captured — answer from it\n\n![screen](${dataUrl})`,
+        createdAt: Date.now(),
+        meta: {},
+        attachments: [],
+      },
+    ]);
+    setStream({ text: '', meta: null, error: null });
+    let sawConvo = activeId;
+    abortRef.current = streamChat(
+      { conversationId: activeId, content: SCREEN_ASK_PROMPT, screenshots: [dataUrl], model: model || null },
+      {
+        onMeta: (meta) => {
+          if (meta.conversationId && meta.conversationId !== sawConvo) {
+            sawConvo = meta.conversationId;
+            setActiveId(meta.conversationId);
+          }
+          setStream((s) => (s ? { ...s, meta: { ...(s.meta ?? {}), ...meta } } : s));
+        },
+        onDelta: (delta) => {
+          streamTextRef.current += delta;
+          setStream((s) => (s ? { ...s, text: s.text + delta } : s));
+        },
+        onNotice: (notice) => showToast(notice, 'info'),
+        onError: (err) => {
+          setStream((s) => (s ? { ...s, error: err } : { text: '', meta: null, error: err }));
+          showToast(err.message, 'error');
+        },
+        onDone: async (done) => {
+          setStream(null);
+          const finalText = streamTextRef.current;
+          streamTextRef.current = '';
+          if (done?.conversationId) {
+            sawConvo = done.conversationId;
+            try {
+              const data = await api.getConversation(done.conversationId);
+              if (sawConvo === done.conversationId) setMessages(data.messages);
+            } catch {  }
+          }
+          refreshConversations(search);
+          if (autoSpeak && finalText && ttsSupported()) speak(finalText).catch(() => {});
+        },
+      },
+    );
+  }, [stream, activeId, model, autoSpeak, showToast, refreshConversations, search]);
+
   useEffect(() => {
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
@@ -458,6 +519,8 @@ export default function App() {
               stream={stream}
               onCodeAction={onCodeAction}
               onRegenerate={activeId ? regenerateMessage : null}
+              onSuggestion={() => { document.querySelector('.composer textarea')?.focus(); }}
+              onSpeak={ttsSupported()}
             />
 
             <Composer
@@ -474,6 +537,7 @@ export default function App() {
               onClearAction={() => setPendingAction(null)}
               onAction={(action) => setPendingAction({ action, selection: '' })}
               onOpenAssistant={() => setAssistantOpen(true)}
+              onVoice={(transcript) => sendMessage({ content: transcript, voice: true })}
               onNew={newConversation}
               speakOn={autoSpeak}
               onToggleSpeak={() => {
@@ -495,6 +559,7 @@ export default function App() {
         onToggle={() => setAssistantOpen((v) => !v)}
         onClose={() => setAssistantOpen(false)}
         onCapture={onScreenshot}
+        onAnswer={onAnswer}
         onError={(msg) => showToast(msg, 'error')}
         onWatchNarrate={narrateShot}
         streaming={Boolean(stream)}

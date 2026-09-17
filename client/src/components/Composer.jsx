@@ -44,6 +44,7 @@ export default function Composer({
   onClearAction,
   onAction,
   onOpenAssistant,
+  onVoice,
   onNew,
   speakOn,
   onToggleSpeak,
@@ -73,8 +74,16 @@ export default function Composer({
       try {
         if (!blob) throw new Error('Nothing recorded.');
         const transcript = await transcribe(blob, mime);
-        setText((t) => (t.trim() && transcript ? `${t.trim()} ${transcript}` : transcript ?? t));
-        if (!transcript) onToast?.('Heard silence — try again.');
+        if (transcript) {
+          setText(transcript);
+          if (onVoice) {
+            onVoice(transcript);
+          } else {
+            setText((t) => (t.trim() && transcript ? `${t.trim()} ${transcript}` : transcript ?? t));
+          }
+        } else {
+          onToast?.('Heard silence — try again.');
+        }
       } catch (err) {
         onToast?.(err.message, 'error');
       } finally {
@@ -288,7 +297,7 @@ export default function Composer({
           {voiceSupported() && (
             <button
               className={`tool-btn mic ${mic === 'recording' ? 'recording' : ''}`}
-              title={mic === 'recording' ? 'Stop & transcribe' : mic === 'transcribing' ? 'Transcribing…' : 'Tap to talk (voice input)'}
+              title={mic === 'recording' ? 'Stop — transcribes and sends your answer' : mic === 'transcribing' ? 'Transcribing…' : 'Tap to talk (voice input)'}
               onClick={toggleMic}
               disabled={disabled && mic === 'idle'}
             >
@@ -317,7 +326,7 @@ export default function Composer({
           placeholder={
             pendingAction
               ? `${ACTIONS.find((a) => a.id === pendingAction.action)?.label} what? (optional note, Enter to run)`
-              : 'Ask anything · / for commands · typed text gets write styles'
+              : 'Message Prism… (Enter to send · / for commands · Shift+Enter for a new line)'
           }
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}

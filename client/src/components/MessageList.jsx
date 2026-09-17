@@ -1,7 +1,9 @@
-import { memo, useEffect, useRef, useState } from 'react';import ReactMarkdown from 'react-markdown';
+import { memo, useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import CodeBlock, { InlineCode } from './CodeBlock.jsx';
+import { speak, stripForSpeech, stopSpeaking, ttsSupported } from '../voice.js';
 
 const rehypePlugins = [[rehypeHighlight, { detect: false, ignoreMissing: true }]];
 const remarkPlugins = [remarkGfm];
@@ -45,7 +47,7 @@ function Markdown({ text, onCodeAction }) {
   );
 }
 
-const Message = memo(function Message({ msg, onCodeAction, onCopy, onRegenerate }) {
+const Message = memo(function Message({ msg, onCodeAction, onRegenerate, onSpeak, isSpeaking }) {
   const isUser = msg.role === 'user';
   const vision = msg.meta?.vision;
   const [copied, setCopied] = useState(false);
@@ -69,7 +71,7 @@ const Message = memo(function Message({ msg, onCodeAction, onCopy, onRegenerate 
 
   return (
     <article className={`msg ${isUser ? 'msg-user' : 'msg-assistant'}`}>
-      <div className="msg-avatar" aria-hidden="true">{isUser ? '🧑‍💻' : '◮'}</div>
+      <div className="msg-avatar" aria-hidden="true">{isUser ? '🧑' : '◮'}</div>
       <div className="msg-body">
         <div className="msg-meta">
           <span className="msg-role">{isUser ? 'You' : 'Prism'}</span>
@@ -79,22 +81,27 @@ const Message = memo(function Message({ msg, onCodeAction, onCopy, onRegenerate 
           {!isUser && msg.meta?.model && <span className="msg-model">{msg.meta.model}</span>}
           {!isUser && vision === 'vision' && <span className="msg-badge vision" title="Answered by the vision model">👁 vision</span>}
           {!isUser && vision === 'ocr' && <span className="msg-badge ocr" title="Vision model fell back to OCR text extraction">⌗ OCR fallback</span>}
-          {!isUser && (
-            <span className="msg-actions">
-              <button className="msg-action" title="Copy this answer" onClick={copyMessage}>
-                {copied ? '✓ Copied' : '⧉ Copy'}
-              </button>
-              {onRegenerate && (
-                <button className="msg-action" title="Regenerate this answer" onClick={() => onRegenerate(msg)}>
-                  ↻ Regenerate
-                </button>
-              )}
-            </span>
-          )}
         </div>
         <div className="msg-content markdown">
           <Markdown text={msg.content} onCodeAction={isUser ? null : onCodeAction} />
         </div>
+        {!isUser && (
+          <div className="msg-actions">
+            <button className="msg-action" title="Copy this answer" onClick={copyMessage}>
+              {copied ? '✓ Copied' : '⧉ Copy'}
+            </button>
+            {onSpeak && ttsSupported() && (
+              <button className="msg-action" title={isSpeaking ? 'Stop speaking' : 'Read this answer aloud'} onClick={onSpeak}>
+                {isSpeaking ? '■ Stop voice' : '🔊 Read aloud'}
+              </button>
+            )}
+            {onRegenerate && (
+              <button className="msg-action" title="Regenerate this answer" onClick={() => onRegenerate(msg)}>
+                ↻ Regenerate
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </article>
   );
@@ -124,7 +131,7 @@ function StreamingMessage({ stream, onCodeAction }) {
           <div className={`msg-content markdown streaming ${stream.text ? '' : 'thinking'}`}>
             {stream.text
               ? <Markdown text={stream.text} onCodeAction={onCodeAction} />
-              : <span className="thinking-dots"><i /><i /><i /></span>}
+              : <span className="thinking-label">Thinking<span className="thinking-dots"><i /><i /><i /></span></span>}
             {stream.text && <span className="caret" aria-hidden="true" />}
           </div>
         )}
@@ -140,9 +147,18 @@ const SUGGESTIONS = [
   { icon: '📎', title: 'Upload project files', body: 'Drop code files, PDFs or DOCX — I keep them as codebase context for the whole session.' },
 ];
 
-export default function MessageList({ messages, stream, onCodeAction, onRegenerate = null, emptyHint = null }) {
+export default function MessageList({
+  messages,
+  stream,
+  onCodeAction,
+  onRegenerate = null,
+  emptyHint = null,
+  onSuggestion = null,
+  onSpeak = false,
+}) {
   const scrollRef = useRef(null);
   const pinRef = useRef(true);
+  const [speakingId, setSpeakingId] = useState(null);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -155,7 +171,47 @@ export default function MessageList({ messages, stream, onCodeAction, onRegenera
     pinRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
   };
 
+  const speakMessage = async (msg) => {
+    if (speakingId === msg.id) {
+      stopSpeaking();
+      setSpeakingId(null);
+      return;
+    }
+    const plain = stripForSpeech(msg.content);
+    if (!plain) return;
+    setSpeakingId(msg.id);
+    try { await speak(plain); } catch {  }
+    setSpeakingId(null);
+  };
+
   const empty = messages.length === 0 && !stream;
+
+  const renderSuggestion = (s) => {
+    const inner = (
+      <div className={`suggestion ${onSuggestion ? 'clickable' : ''}`}>
+        <div className="suggestion-title"><span aria-hidden="true">{s.icon}</span> {s.title}</div>
+        <div className="suggestion-body">{s.body}</div>
+      </div>
+    );
+    return onSuggestion ? (
+      <button key={s.title} type="button" className="suggestion-btn" onClick={() => onSuggestion(s)}>
+        {inner}
+      </button>
+    ) : (
+      <div key={s.title} className="suggestion-wrap">{inner}</div>
+    );
+  };
+
+  const fullEmpty = (
+    <div className="welcome">
+      <div className="welcome-badge" aria-hidden="true">◮</div>
+      <h2>What can I help with?</h2>
+      <p className="welcome-sub">
+        Chat normally, attach code files, or capture your screen — Prism reads it and answers.
+      </p>
+      <div className="suggestions">{SUGGESTIONS.map(renderSuggestion)}</div>
+    </div>
+  );
 
   if (empty && emptyHint) {
     return (
@@ -163,12 +219,6 @@ export default function MessageList({ messages, stream, onCodeAction, onRegenera
         <div className="welcome welcome-mini">
           <div className="welcome-badge sm" aria-hidden="true">◮</div>
           <p className="welcome-sub">{emptyHint}</p>
-          <div className="suggestions s1">
-            <div className="suggestion">
-              <div className="suggestion-title">🖥 Capture → ask</div>
-              <div className="suggestion-body">Screenshot a terminal error, UI, or docs and ask — I analyze what's on screen.</div>
-            </div>
-          </div>
         </div>
       </div>
     );
@@ -176,40 +226,27 @@ export default function MessageList({ messages, stream, onCodeAction, onRegenera
 
   return (
     <div className="chat-scroll" ref={scrollRef} onScroll={onScroll}>
-      {empty ? (
-        <div className="welcome">
-          <div className="welcome-badge" aria-hidden="true">◮</div>
-          <h2>Prism</h2>
-          <p className="welcome-sub">
-            Your AI pair-programmer with eyes. Chat normally, attach code files, or capture your
-            screen on demand — nothing is recorded without you pressing the button.
-          </p>
-          <div className="suggestions">
-            {SUGGESTIONS.map((s) => (
-              <div className="suggestion" key={s.title}>
-                <div className="suggestion-title"><span aria-hidden="true">{s.icon}</span> {s.title}</div>
-                <div className="suggestion-body">{s.body}</div>
-              </div>
-            ))}
+      {empty
+        ? fullEmpty
+        : (
+          <div className="msg-list">
+            {messages.map((m, i) => {
+              const isLastAssistant =
+                m.role === 'assistant' && i === messages.length - 1;
+              return (
+                <Message
+                  key={m.id}
+                  msg={m}
+                  onCodeAction={onCodeAction}
+                  onRegenerate={isLastAssistant ? onRegenerate : null}
+                  onSpeak={onSpeak ? () => speakMessage(m) : null}
+                  isSpeaking={speakingId === m.id}
+                />
+              );
+            })}
+            {stream && <StreamingMessage stream={stream} onCodeAction={onCodeAction} />}
           </div>
-        </div>
-      ) : (
-        <div className="msg-list">
-          {messages.map((m, i) => {
-            const isLastAssistant =
-              m.role === 'assistant' && i === messages.length - 1;
-            return (
-              <Message
-                key={m.id}
-                msg={m}
-                onCodeAction={onCodeAction}
-                onRegenerate={isLastAssistant ? onRegenerate : null}
-              />
-            );
-          })}
-          {stream && <StreamingMessage stream={stream} onCodeAction={onCodeAction} />}
-        </div>
-      )}
+        )}
       <div className="chat-pad" />
     </div>
   );
