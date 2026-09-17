@@ -10,7 +10,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.ImageReader
@@ -34,12 +36,10 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.core.content.ContextCompat
-import android.widget.ImageView
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import java.io.ByteArrayOutputStream
 import kotlin.math.abs
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 class FloatingService : Service() {
@@ -65,8 +65,7 @@ class FloatingService : Service() {
     private val captureThread = HandlerThread("prism-capture").apply { start() }
     private val captureHandler by lazy { Handler(captureThread.looper) }
 
-    private var bubble: View? = null
-    private var bubbleParams: WindowManager.LayoutParams? = null
+    private var handle: View? = null
     private var panel: FrameLayout? = null
     private var panelParams: WindowManager.LayoutParams? = null
     private var panelVisible = false
@@ -91,11 +90,12 @@ class FloatingService : Service() {
         projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         createChannel()
         goForeground(SpecialUse)
-        ensureBubble()
+        ensureHandle()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
+            ACTION_START -> showPanel(true)
             ACTION_STOP -> stopSelf()
             ACTION_SHOW_PANEL -> showPanel(true)
             ACTION_CAPTURE_DENIED -> {
@@ -171,25 +171,32 @@ class FloatingService : Service() {
 
 
     @SuppressLint("ClickableViewAccessibility")
-    private fun ensureBubble() {
-        if (bubble != null) return
-        val size = dp(56)
-        val view = ImageView(this).apply {
-            setImageResource(R.drawable.bubble_bg)
+    private fun ensureHandle() {
+        if (handle != null) return
+        val w = dp(7)
+        val h = dp(112)
+        val view = View(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = (w / 2f)
+                setColor(Color.parseColor("#7C6CFF"))
+                setStroke(1, Color.parseColor("#66FFFFFF"))
+            }
+            alpha = 0.92f
             contentDescription = "Prism assistant"
         }
         val overlayType =
             if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
+        val (sw, sh) = displaySize().let { it.first to it.second }
         val params = WindowManager.LayoutParams(
-            size, size,
+            w, h,
             overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            val (sw, sh) = displaySize().let { it.first to it.second }
-            x = sw - size - dp(12)
+            x = sw - w - dp(6)
             y = (sh * 0.35f).toInt()
         }
         var downX = 0f; var downY = 0f
@@ -207,7 +214,8 @@ class FloatingService : Service() {
                     val dx = (e.rawX - downX).toInt(); val dy = (e.rawY - downY).toInt()
                     if (abs(dx) > 8 || abs(dy) > 8) dragged = true
                     if (dragged) {
-                        params.x = startX + dx; params.y = startY + dy
+                        params.x = (startX + dx).coerceIn(0, sw - w)
+                        params.y = (startY + dy).coerceIn(dp(8), sh - h - dp(8))
                         runCatching { wm.updateViewLayout(v, params) }
                     }
                     true
@@ -220,8 +228,7 @@ class FloatingService : Service() {
             }
         }
         wm.addView(view, params)
-        bubble = view
-        bubbleParams = params
+        handle = view
     }
 
 
@@ -340,8 +347,8 @@ class FloatingService : Service() {
             val (w, h, densityDpi) = displaySize(withDpi = true)
             val cappedW: Int
             val cappedH: Int
-            if (maxOf(w, h) > 1920) {
-                val scaleDown = 1920f / maxOf(w, h).toFloat()
+            if (maxOf(w, h) > 1440) {
+                val scaleDown = 1440f / maxOf(w, h).toFloat()
                 cappedW = (w * scaleDown).roundToInt()
                 cappedH = (h * scaleDown).roundToInt()
             } else { cappedW = w; cappedH = h }
@@ -394,7 +401,7 @@ class FloatingService : Service() {
         mainHandler.removeCallbacks(timeoutRunnable)
         teardownCapture()
         mainHandler.post {
-            evaluateCaptureResult(token, bitmap?.toPngDataUrl())
+            evaluateCaptureResult(token, bitmap?.toJpegDataUrl())
             showPanel(true)
             goForeground(SpecialUse)
         }
@@ -426,8 +433,8 @@ class FloatingService : Service() {
     }
 
     private fun removeViews() {
-        bubble?.let { runCatching { wm.removeView(it) } }
-        bubble = null
+        handle?.let { runCatching { wm.removeView(it) } }
+        handle = null
         if (panelVisible) panel?.let { runCatching { wm.removeView(it) } }
         panelVisible = false
     }
@@ -450,10 +457,10 @@ class FloatingService : Service() {
         }
     }
 
-    private fun Bitmap.toPngDataUrl(): String {
+    private fun Bitmap.toJpegDataUrl(): String {
         val out = ByteArrayOutputStream()
-        compress(Bitmap.CompressFormat.PNG, 100, out)
-        return "data:image/png;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+        compress(Bitmap.CompressFormat.JPEG, 82, out)
+        return "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).roundToInt()

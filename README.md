@@ -139,13 +139,13 @@ Without a disk, everything still works — data is just ephemeral per deploy.
 
 ## Android app (floating over other apps)
 
-`android/` is a native Kotlin app — the Arc-style bubble on your phone:
+`android/` is a native Kotlin app — the Arc-style screen assistant on your phone:
 
-- **Draggable bubble displayed over all your other apps** (foreground service + overlay windows)
-- Tap the bubble → mini assistant panel opens on top of whatever you're doing
-- **Screenshot in one tap** — Android's own MediaProjection consent dialog gates each capture; exactly one frame is taken, then the projection is torn down (never continuous)
+- **Chat-first** — opening Prism goes straight into the assistant panel; no manual start step
+- **Thin edge-line handle** (not a bubble) sits at the screen edge; drag it anywhere, tap to reopen the panel
+- **⚡ Answer in one tap** — capture your screen and get a reply in seconds (JPEG frames are smaller and faster than PNG); answers stream into the small panel
+- **Screenshot** = Android's own MediaProjection consent dialog gates each capture; exactly one frame is taken, then the projection is torn down (never continuous)
 - **Region capture** = capture a frame, then drag-crop inside the panel
-- The answer **streams inside the small panel**; the panel hides itself during capture
 - **The APK is built by GitHub Actions** — see **Actions → Android APK → Artifacts** after every push
 
 Setup & build details: [`android/README.md`](android/README.md).

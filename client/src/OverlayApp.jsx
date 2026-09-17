@@ -31,6 +31,10 @@ const WATCH_NARRATION_PROMPT =
   'Watch narration: in ONE short sentence, describe what visibly changed on the screen. ' +
   'Be concrete — name the app, dialog, or content that changed. No preamble.';
 
+const SCREEN_ASK_PROMPT =
+  'A screenshot was just captured. Answer immediately: say what is on screen, then give the ' +
+  'most likely needed answer (fix, next step, explanation). Lead with the answer. Be direct and short.';
+
 export default function OverlayApp() {
   const [messages, setMessages] = useState([]);
   const [stream, setStream] = useState(null);
@@ -325,6 +329,30 @@ export default function OverlayApp() {
     }
   }, [addShot, flash]);
 
+
+  const captureAndAsk = useCallback(async () => {
+    setBusy('answer');
+    try {
+      const dataUrl = android
+        ? await androidCapture('screen')
+        : desktop
+          ? await desktop.captureScreen()
+          : (await grabFrame()).dataUrl;
+      if (!dataUrl) {
+        flash('Capture cancelled.');
+        return;
+      }
+      sendContent(SCREEN_ASK_PROMPT, {
+        screenshots: [dataUrl],
+        userPreview: `📸 Screen captured — answer from it`,
+      });
+    } catch (err) {
+      flash(err?.name === 'NotAllowedError' ? 'Capture cancelled.' : `Capture failed: ${err.message}`);
+    } finally {
+      setBusy(null);
+    }
+  }, [sendContent, flash]);
+
   const toggleMic = useCallback(async () => {
     if (mic === 'recording') {
       setMic('transcribing');
@@ -397,6 +425,7 @@ export default function OverlayApp() {
   const paletteOpen = text.startsWith('/');
   const commands = useMemo(() => {
     const list = [
+      { id: 'answer', icon: '⚡', label: 'Answer from my screen', hint: 'capture now and get an instant answer', run: captureAndAsk },
       ...(!android ? [{
         id: 'watch', icon: '◉', label: watch ? 'Stop watching' : 'Watch screen',
         hint: 'screenshot only when something moves', run: () => toggleWatch(),
@@ -418,7 +447,7 @@ export default function OverlayApp() {
     const q = text.slice(1).trim().toLowerCase();
     if (!q) return list;
     return list.filter((c) => c.id.includes(q) || c.label.toLowerCase().includes(q));
-  }, [text, watch, narrate, autoSpeak, messages.length, toggleWatch, captureScreen, showWindowPicker, captureRegion, toggleMic, newThread]);
+  }, [text, watch, narrate, autoSpeak, messages.length, captureAndAsk, toggleWatch, captureScreen, showWindowPicker, captureRegion, toggleMic, newThread]);
 
   useEffect(() => {
     setPalIndex(0);
@@ -600,7 +629,9 @@ export default function OverlayApp() {
           messages={messages}
           stream={stream}
           onCodeAction={null}
-          emptyHint={`One bar for everything: type to ask · / for commands · typed text gets write styles. ${kbd} toggles me anywhere.`}
+          emptyHint={android
+            ? `⚡ Tap “Answer” to capture your screen and get a reply in seconds — or just type below.`
+            : `One bar for everything: ⚡ Answer captures your screen and replies instantly · type to ask · / for commands. ${kbd} toggles me anywhere.`}
         />
       </div>
 
@@ -695,6 +726,9 @@ export default function OverlayApp() {
 
         {}
         <div className={`ov-capture-row ${android ? 'two' : ''}`}>
+          <button className="ov-cap ov-cap-answer" disabled={Boolean(busy) || Boolean(stream)} onClick={captureAndAsk} title="Capture your screen and get an instant answer">
+            ⚡<span>Answer</span>{busy === 'answer' && <span className="spinner" />}
+          </button>
           <button className="ov-cap" disabled={Boolean(busy) || Boolean(stream)} onClick={captureScreen} title="Capture the whole screen">
             🖥<span>Screen</span>{busy === 'screen' && <span className="spinner" />}
           </button>
@@ -724,7 +758,7 @@ export default function OverlayApp() {
           <input
             ref={inputRef}
             className="ov-input"
-            placeholder={shots.length ? 'Ask about the capture… ( / for commands )' : 'Ask anything · / for commands · type text to rewrite it'}
+            placeholder={shots.length ? 'Ask about the capture… ( / for commands )' : 'Ask anything · ⚡ Answer captures your screen · type text to rewrite it'}
             value={text}
             disabled={Boolean(stream)}
             onChange={(e) => setText(e.target.value)}

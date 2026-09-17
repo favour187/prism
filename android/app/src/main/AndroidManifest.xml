@@ -42,7 +42,7 @@
             android:foregroundServiceType="specialUse|mediaProjection">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Floating assistant bubble and capture-on-demand panel. The screen is never recorded; a single frame is captured only when the user taps a capture button." />
+                android:value="Floating edge handle and capture-on-demand answer panel. The screen is never recorded; a single frame is captured only when the user taps a capture button." />
         </service>
     </application>
 </manifest>
