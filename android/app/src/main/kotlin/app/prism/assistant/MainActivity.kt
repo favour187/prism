@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.speech.tts.TextToSpeech
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.PermissionRequest
@@ -21,11 +22,14 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import java.util.Locale
 
-class MainActivity : Activity() {
+class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private lateinit var container: FrameLayout
     private var webView: WebView? = null
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
 
     private val prefs by lazy { getSharedPreferences("prism", MODE_PRIVATE) }
 
@@ -35,6 +39,8 @@ class MainActivity : Activity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        tts = TextToSpeech(this, this)
 
         container = FrameLayout(this).apply {
             setBackgroundColor(Color.parseColor("#0E1016"))
@@ -47,6 +53,27 @@ class MainActivity : Activity() {
 
         initWebView()
         requestAppPermissions()
+    }
+
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            tts?.language = Locale.getDefault()
+            ttsReady = true
+        }
+    }
+
+    fun speakText(text: String) {
+        if (!ttsReady || text.isBlank()) return
+        tts?.stop()
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "prism_main_${System.currentTimeMillis()}")
+    }
+
+    fun stopSpeaking() {
+        tts?.stop()
+    }
+
+    fun isSpeaking(): Boolean {
+        return tts?.isSpeaking == true
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -169,6 +196,9 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        tts?.stop()
+        tts?.shutdown()
+        tts = null
         container.removeAllViews()
         webView?.destroy()
         webView = null
@@ -200,5 +230,20 @@ class MainAppJsBridge(private val activity: MainActivity) {
     @android.webkit.JavascriptInterface
     fun isEdgeRunning(): Boolean {
         return activity.isEdgeAssistantRunning()
+    }
+
+    @android.webkit.JavascriptInterface
+    fun speakText(text: String) {
+        activity.speakText(text)
+    }
+
+    @android.webkit.JavascriptInterface
+    fun stopSpeaking() {
+        activity.stopSpeaking()
+    }
+
+    @android.webkit.JavascriptInterface
+    fun isSpeaking(): Boolean {
+        return activity.isSpeaking()
     }
 }

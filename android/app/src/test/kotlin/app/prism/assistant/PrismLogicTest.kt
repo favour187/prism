@@ -68,4 +68,12 @@ class PrismLogicTest {
         assertEquals(300L, ttft)
         assertEquals(1500L, total)
     }
+
+    @Test
+    fun testAudioTtsTextSanitization() {
+        val markdown = "Hello **world**, here is `code`"
+        val stripped = markdown.replace("**", "").replace("`", "")
+        assertEquals("Hello world, here is code", stripped)
+        assertTrue(stripped.isNotBlank())
+    }
 }

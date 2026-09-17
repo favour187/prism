@@ -22,6 +22,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.speech.tts.TextToSpeech
 import android.util.Base64
 import android.util.DisplayMetrics
 import android.view.Gravity
@@ -39,10 +40,11 @@ import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import java.io.ByteArrayOutputStream
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-class FloatingService : Service() {
+class FloatingService : Service(), TextToSpeech.OnInitListener {
 
     companion object {
         const val ACTION_START = "app.prism.assistant.START"
@@ -75,6 +77,8 @@ class FloatingService : Service() {
     private var panelVisible = false
 
     private var webView: WebView? = null
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
 
     private var pendingToken: String? = null
     private var projection: MediaProjection? = null
@@ -93,9 +97,31 @@ class FloatingService : Service() {
         isRunning = true
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        tts = TextToSpeech(this, this)
         createChannel()
         goForeground(SpecialUse)
         ensureHandle()
+    }
+
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            tts?.language = Locale.getDefault()
+            ttsReady = true
+        }
+    }
+
+    fun speakText(text: String) {
+        if (!ttsReady || text.isBlank()) return
+        tts?.stop()
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "prism_utterance_${System.currentTimeMillis()}")
+    }
+
+    fun stopSpeaking() {
+        tts?.stop()
+    }
+
+    fun isSpeaking(): Boolean {
+        return tts?.isSpeaking == true
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -123,6 +149,9 @@ class FloatingService : Service() {
 
     override fun onDestroy() {
         isRunning = false
+        tts?.stop()
+        tts?.shutdown()
+        tts = null
         teardownCapture()
         removeViews()
         webView?.destroy()
@@ -491,5 +520,20 @@ class PrismJsBridge(private val service: FloatingService) {
     @android.webkit.JavascriptInterface
     fun stopEdge() {
         service.stopSelf()
+    }
+
+    @android.webkit.JavascriptInterface
+    fun speakText(text: String) {
+        service.speakText(text)
+    }
+
+    @android.webkit.JavascriptInterface
+    fun stopSpeaking() {
+        service.stopSpeaking()
+    }
+
+    @android.webkit.JavascriptInterface
+    fun isSpeaking(): Boolean {
+        return service.isSpeaking()
     }
 }

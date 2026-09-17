@@ -4,7 +4,7 @@ export function voiceSupported() {
 }
 
 export function ttsSupported() {
-  return 'speechSynthesis' in window;
+  return typeof window.prismAndroid?.speakText === 'function' || 'speechSynthesis' in window;
 }
 
 const MIME_CANDIDATES = [
@@ -129,32 +129,64 @@ export function speak(markdown, { rate = 1.04, onEnd } = {}) {
       onEnd?.();
       return resolve();
     }
-    window.speechSynthesis.cancel();
-    const chunks = splitForSpeech(stripForSpeech(markdown));
-    if (!chunks.length) {
+
+    const plain = stripForSpeech(markdown);
+    if (!plain) {
       onEnd?.();
       return resolve();
     }
-    let i = 0;
-    const next = () => {
-      if (i >= chunks.length) {
+
+    if (typeof window.prismAndroid?.speakText === 'function') {
+      try {
+        window.prismAndroid.speakText(plain);
+        onEnd?.();
+        return resolve();
+      } catch {
+        // Fallback to web speechSynthesis
+      }
+    }
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const chunks = splitForSpeech(plain);
+      if (!chunks.length) {
         onEnd?.();
         return resolve();
       }
-      const u = new SpeechSynthesisUtterance(chunks[i++]);
-      u.rate = rate;
-      u.onend = next;
-      u.onerror = next;
-      window.speechSynthesis.speak(u);
-    };
-    next();
+      let i = 0;
+      const next = () => {
+        if (i >= chunks.length) {
+          onEnd?.();
+          return resolve();
+        }
+        const u = new SpeechSynthesisUtterance(chunks[i++]);
+        u.rate = rate;
+        u.onend = next;
+        u.onerror = next;
+        window.speechSynthesis.speak(u);
+      };
+      next();
+    } else {
+      onEnd?.();
+      resolve();
+    }
   });
 }
 
 export function stopSpeaking() {
-  if (ttsSupported()) window.speechSynthesis.cancel();
+  try {
+    window.prismAndroid?.stopSpeaking?.();
+  } catch {}
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
 }
 
 export function isSpeaking() {
-  return ttsSupported() && window.speechSynthesis.speaking;
+  try {
+    if (typeof window.prismAndroid?.isSpeaking === 'function') {
+      return window.prismAndroid.isSpeaking();
+    }
+  } catch {}
+  return ('speechSynthesis' in window) && window.speechSynthesis.speaking;
 }
