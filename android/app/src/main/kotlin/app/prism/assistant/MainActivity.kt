@@ -93,6 +93,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 useWideViewPort = true
                 loadWithOverviewMode = true
                 textZoom = 100
+                mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             }
 
             addJavascriptInterface(MainAppJsBridge(this@MainActivity), "prismAndroid")

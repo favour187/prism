@@ -1,3 +1,5 @@
+import { isAndroid, isEdgeRunning, startEdgeAssistant, stopEdgeAssistant } from '../capture.js';
+import { useState, useEffect } from 'react';
 export default function ChatHeader({
   title,
   sidebarOpen,
@@ -14,6 +16,25 @@ export default function ChatHeader({
   const models = cfg?.models?.length ? cfg.models : [];
   const defaultModel = cfg?.defaults?.chatModel;
   const current = model || defaultModel || 'default';
+  const [edgeActive, setEdgeActive] = useState(() => isAndroid() && isEdgeRunning());
+
+  useEffect(() => {
+    if (!isAndroid()) return;
+    const interval = setInterval(() => {
+      setEdgeActive(isEdgeRunning());
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const toggleEdge = () => {
+    if (edgeActive) {
+      stopEdgeAssistant();
+      setEdgeActive(false);
+    } else {
+      const started = startEdgeAssistant();
+      setEdgeActive(started);
+    }
+  };
 
   return (
     <header className="chat-header">
@@ -44,6 +65,16 @@ export default function ChatHeader({
           ))}
         </select>
 
+                {isAndroid() && (
+          <button
+            className={`btn small ${edgeActive ? 'danger' : 'primary'}`}
+            onClick={toggleEdge}
+            title={edgeActive ? 'Disable Edge Assistant overlay' : 'Start Edge Assistant overlay'}
+            style={{ padding: '6px 12px', fontSize: '12px' }}
+          >
+            {edgeActive ? 'Stop Edge' : '⚡ Start Edge'}
+          </button>
+        )}
         <button
           className="btn ghost assistant-btn"
           onClick={onOpenAssistant}
