@@ -22,7 +22,7 @@ export default function ChatHeader({
     if (!isAndroid()) return;
     const interval = setInterval(() => {
       setEdgeActive(isEdgeRunning());
-    }, 2000);
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -32,7 +32,7 @@ export default function ChatHeader({
       setEdgeActive(false);
     } else {
       const started = startEdgeAssistant();
-      setEdgeActive(started);
+      if (started) setEdgeActive(true);
     }
   };
 
@@ -65,16 +65,18 @@ export default function ChatHeader({
           ))}
         </select>
 
-                {isAndroid() && (
+        {isAndroid() && (
           <button
             className={`btn small ${edgeActive ? 'danger' : 'primary'}`}
             onClick={toggleEdge}
-            title={edgeActive ? 'Disable Edge Assistant overlay' : 'Start Edge Assistant overlay'}
-            style={{ padding: '6px 12px', fontSize: '12px' }}
+            title={edgeActive ? 'Disable Floating Assistant' : 'Start Floating Assistant'}
+            aria-label={edgeActive ? 'Disable Floating Assistant' : 'Start Floating Assistant'}
+            style={{ padding: '7px 12px', fontSize: '12px', whiteSpace: 'nowrap' }}
           >
-            {edgeActive ? 'Stop Edge' : '⚡ Start Edge'}
+            {edgeActive ? 'Stop Floating' : '⚡ Start Floating'}
           </button>
         )}
+
         <button
           className="btn ghost assistant-btn"
           onClick={onOpenAssistant}
