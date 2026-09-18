@@ -174,13 +174,13 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             this,
             Intent(this, FloatingService::class.java).setAction(FloatingService.ACTION_START),
         )
-        Toast.makeText(this, "Edge Assistant started — thin handle active at screen edge", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Floating Assistant started — thin handle active at screen edge", Toast.LENGTH_SHORT).show()
         return true
     }
 
     fun stopEdgeAssistant() {
         startService(Intent(this, FloatingService::class.java).setAction(FloatingService.ACTION_STOP))
-        Toast.makeText(this, "Edge Assistant disabled", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Floating Assistant disabled", Toast.LENGTH_SHORT).show()
     }
 
     fun isEdgeAssistantRunning(): Boolean {
@@ -214,11 +214,14 @@ class MainAppJsBridge(private val activity: MainActivity) {
 
     @android.webkit.JavascriptInterface
     fun startEdgeAssistant(): Boolean {
-        var result = false
-        activity.runOnUiThread {
-            result = activity.startEdgeAssistant()
+        // This method is invoked from the WebView. Run the Android action immediately
+        // and return a deterministic result instead of racing runOnUiThread.
+        if (!Settings.canDrawOverlays(activity)) {
+            activity.runOnUiThread { activity.startEdgeAssistant() }
+            return false
         }
-        return result
+        activity.runOnUiThread { activity.startEdgeAssistant() }
+        return true
     }
 
     @android.webkit.JavascriptInterface
