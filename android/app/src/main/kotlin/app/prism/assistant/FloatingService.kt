@@ -55,7 +55,7 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
         const val EXTRA_RESULT_DATA = "resultData"
         const val ACTION_SHOW_PANEL = "app.prism.assistant.SHOW_PANEL"
 
-        const val DEFAULT_SERVER = "https://prism-yks3.onrender.com"
+        const val DEFAULT_SERVER = "https://prism-0367.onrender.com"
         private const val NOTIF_ID = 101
         private const val CHANNEL_ID = "prism"
         private const val CAPTURE_TIMEOUT_MS = 9_000L
