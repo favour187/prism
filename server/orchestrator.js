@@ -189,6 +189,8 @@ export async function* runChatTurn({
       maxTokens: providerConfig.maxTokens,
       signal,
     })) {
+      if (chunk.meta) yield { type: 'meta', ...chunk.meta };
+      if (chunk.notice) yield { type: 'notice', notice: chunk.notice };
       if (chunk.delta) {
         full += chunk.delta;
         yield { type: 'delta', delta: chunk.delta };
