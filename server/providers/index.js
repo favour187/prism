@@ -1,6 +1,6 @@
 import config from '../config.js';
 import { FeatherlessProvider } from './featherless.js';
-import { GrokProvider } from './grok.js';
+import { GroqProvider } from './groq.js';
 import { MockProvider } from './mock.js';
 
 let cached = null;
@@ -18,10 +18,12 @@ export function getProvider() {
       sttBaseUrl: config.featherless.sttBaseUrl,
     });
   } else {
-    cached = new GrokProvider({
-      apiKey: config.grok.apiKey,
-      baseUrl: config.grok.baseUrl,
-      timeoutMs: config.grok.timeoutMs,
+    cached = new GroqProvider({
+      apiKey: config.groq.apiKey,
+      baseUrl: config.groq.baseUrl,
+      timeoutMs: config.groq.timeoutMs,
+      sttModel: config.groq.sttModel,
+      sttBaseUrl: config.groq.sttBaseUrl,
     });
   }
   return cached;
