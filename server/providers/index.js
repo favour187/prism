@@ -58,7 +58,7 @@ class GeminiWithGroqFallback {
         }
         return;
       } catch (err) {
-        if (emittedText || err?.code === 'CLIENT_ABORTED') throw err;
+        if (emittedText || opts.signal?.aborted || err?.code === 'CLIENT_ABORTED') throw err;
         // Fall through to Groq when Gemini is unavailable, rate-limited, or rejects the request.
       }
     }
