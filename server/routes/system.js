@@ -31,7 +31,7 @@ router.get('/config', async (_req, res, next) => {
   try {
     const provider = getProvider();
     let models = await cachedModels(provider);
-    const providerConfig = config[provider.id] ?? config.grok;
+    const providerConfig = config[provider.id] ?? config.groq;
     res.json({
       app: { name: 'Prism', version: '1.0.0' },
       provider: { id: provider.id, ready: provider.isReady(), reason: provider.isReady() ? null : provider.notReadyReason() },
