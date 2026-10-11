@@ -75,6 +75,7 @@ export async function* runChatTurn({
   skip_persist = false,
 }) {
   const provider = getProvider();
+  const providerConfig = config[provider.id] ?? config.grok;
 
   const content = String(rawContent ?? '').slice(0, 64_000).trim();
   const hasAnything = Boolean(content) || screenshots.length > 0 || attachmentIds.length > 0 || Boolean(action) || skip_persist;
@@ -161,8 +162,8 @@ export async function* runChatTurn({
     store.attachToConversation(cid, attachmentIds);
   }
 
-  const chatModel = model || config.featherless.chatModel;
-  const visionModel = config.featherless.visionModel;
+  const chatModel = model || providerConfig.chatModel;
+  const visionModel = providerConfig.visionModel;
   const wantsVision = images.length > 0;
 
   let usedModel = wantsVision ? visionModel : chatModel;
@@ -184,8 +185,8 @@ export async function* runChatTurn({
     for await (const chunk of provider.streamChat({
       model: provider.id === 'mock' ? (wantsVision ? 'mock/vision-demo' : 'mock/chat-demo') : mdl,
       messages: msgs,
-      temperature: config.featherless.temperature,
-      maxTokens: config.featherless.maxTokens,
+      temperature: providerConfig.temperature,
+      maxTokens: providerConfig.maxTokens,
       signal,
     })) {
       if (chunk.delta) {
