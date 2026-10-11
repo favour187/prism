@@ -75,7 +75,7 @@ export async function* runChatTurn({
   skip_persist = false,
 }) {
   const provider = getProvider();
-  const providerConfig = config[provider.id] ?? config.grok;
+  const providerConfig = config[provider.id] ?? config.groq;
 
   const content = String(rawContent ?? '').slice(0, 64_000).trim();
   const hasAnything = Boolean(content) || screenshots.length > 0 || attachmentIds.length > 0 || Boolean(action) || skip_persist;
