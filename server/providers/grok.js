@@ -3,13 +3,11 @@ import { AIProvider, ProviderError } from './base.js';
 export class GrokProvider extends AIProvider {
   id = 'grok';
 
-  constructor({ apiKey, baseUrl, timeoutMs, sttModel = null, sttBaseUrl = null }) {
+  constructor({ apiKey, baseUrl, timeoutMs }) {
     super();
     this.apiKey = apiKey;
     this.baseUrl = baseUrl;
     this.timeoutMs = timeoutMs;
-    this.sttModel = null;
-    this.sttBaseUrl = null;
   }
 
   isReady() {
@@ -35,7 +33,7 @@ export class GrokProvider extends AIProvider {
 
   async #request(path, body, { stream = false, signal } = {}) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(new Error('Featherless request timed out')), this.timeoutMs);
+    const timer = setTimeout(() => controller.abort(new Error('Grok request timed out')), this.timeoutMs);
     const onAbort = () => controller.abort(signal.reason);
     if (signal) {
       if (signal.aborted) {
@@ -54,9 +52,9 @@ export class GrokProvider extends AIProvider {
     } catch (err) {
       if (err?.name === 'AbortError') {
         if (signal?.aborted) throw new ProviderError('Request aborted by client.', 'CLIENT_ABORTED', 499);
-        throw new ProviderError('Featherless request timed out.', 'PROVIDER_TIMEOUT', 504);
+        throw new ProviderError('Grok request timed out.', 'PROVIDER_TIMEOUT', 504);
       }
-      throw new ProviderError(`Cannot reach Featherless: ${err.message}`, 'PROVIDER_UNREACHABLE', 502);
+      throw new ProviderError(`Cannot reach Grok: ${err.message}`, 'PROVIDER_UNREACHABLE', 502);
     } finally {
       clearTimeout(timer);
       if (signal) signal.removeEventListener('abort', onAbort);
@@ -83,7 +81,7 @@ export class GrokProvider extends AIProvider {
               ? 'PROVIDER_UPSTREAM_ERROR'
               : 'PROVIDER_BAD_REQUEST';
     throw new ProviderError(
-      `Featherless error (${res.status}): ${detail || res.statusText}`,
+      `Grok error (${res.status}): ${detail || res.statusText}`,
       code,
       res.status === 429 ? 429 : res.status === 404 ? 400 : 502,
     );
@@ -97,7 +95,7 @@ export class GrokProvider extends AIProvider {
       { stream: true, signal },
     );
     await this.#throwIfNotOk(res);
-    if (!res.body) throw new ProviderError('Featherless returned no stream body.', 'PROVIDER_UPSTREAM_ERROR', 502);
+    if (!res.body) throw new ProviderError('Grok returned no stream body.', 'PROVIDER_UPSTREAM_ERROR', 502);
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -125,7 +123,7 @@ export class GrokProvider extends AIProvider {
           const errPayload = json?.error;
           if (errPayload) {
             throw new ProviderError(
-              `Featherless stream error: ${errPayload.message ?? 'unknown'}`,
+              `Grok stream error: ${errPayload.message ?? 'unknown'}`,
               'PROVIDER_UPSTREAM_ERROR',
               502,
             );
@@ -168,9 +166,8 @@ export class GrokProvider extends AIProvider {
     return false;
   }
 
-  async transcribeAudio({ buffer, mime, filename }) {
-    throw new ProviderError('Grok speech transcription is not enabled in this provider adapter.', 'TRANSCRIPTION_UNSUPPORTED', 503);
-    this.#assertReady();
+  async transcribeAudio() {
+    throw new ProviderError('Grok transcription is not enabled in this provider adapter.', 'TRANSCRIPTION_UNSUPPORTED', 503);
     if (!this.sttModel) {
       throw new ProviderError('Speech-to-text is not configured (GROK_STT_MODEL).', 'STT_NOT_CONFIGURED', 503);
     }
