@@ -26,7 +26,7 @@ Powered by **GroqCloud (free API tier)** · Streaming SSE · Vision + OCR fallba
 - `Explain` / `Fix` / `Improve` / `Generate` actions (from the composer _or_ hovering any code block).
 
 ### 🎤 Voice (hears you, speaks back)
-- Tap the 🎤, talk, tap again — Prism **transcribes your speech** (backend STT; audio never stored) into the message box
+- Tap the 🎤, talk, tap again — Prism transcribes speech through Groq's Whisper endpoint (audio is processed for transcription) into the message box
 - Prism **speaks answers aloud** (system voice; markdown-aware: code blocks are summarized, not spelled out) — toggle 🔊/🔇 in the header
 - Works in the web app, the desktop overlay, and the Android panel
 
@@ -114,7 +114,8 @@ Without a disk, everything still works — data is just ephemeral per deploy.
 | `GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | OpenAI-compatible endpoint |
 | `GROQ_CHAT_MODEL` | `qwen/qwen3.8-27b` | Default chat model |
 | `GROQ_VISION_MODEL` | `qwen/qwen3.8-27b` | Vision model for screenshots/images |
-| `AI_PROVIDER` | `grok` | `grok`, `featherless`, or `mock` (dev/CI only; visibly flagged in UI) |
+| `GROQ_STT_MODEL` | `whisper-large-v3-turbo` | Speech-to-text model |
+| `AI_PROVIDER` | `groq` | `groq`, `featherless`, or `mock` (dev/CI only; visibly flagged in UI) |
 | `PORT` / `HOST` | `4000` / `0.0.0.0` | Bind address |
 | `DATA_DIR` | `server/data` | SQLite DB + uploads location |
 | `MAX_UPLOAD_MB`, `MAX_UPLOAD_FILES` | `12`, `6` | Upload limits |
@@ -215,7 +216,7 @@ prism/
 
 ## Notes
 
-- The `mock` provider exists **only** for keyless local development/CI (`AI_PROVIDER=mock`) and is visibly badged in the UI. Production uses Featherless.
+- The `mock` provider exists **only** for keyless local development/CI (`AI_PROVIDER=mock`) and is visibly badged in the UI. Production defaults to GroqCloud; requests are subject to Groq's free-tier limits.
 - Models are user-selectable per-chat in the header; defaults come from env. Pick whichever chat/vision models your Featherless account exposes.
 - **Server model list is cached** for 10 minutes per process, so repeated `/api/config` hits (web app + overlay + Android + desktop) don't re-list from the provider.
 
