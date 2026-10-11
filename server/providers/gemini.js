@@ -26,46 +26,36 @@ export class GeminiProvider extends AIProvider {
     return { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' };
   }
 
-  async #request(path, body, signal) {
+  async #request(path, body, { stream = false, signal } = {}) {
     this.#assertReady();
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(new Error('Gemini request timed out')), this.timeoutMs);
-    const onAbort = () => controller.abort(signal.reason);
-    if (signal) {
-      if (signal.aborted) {
-        clearTimeout(timer);
-        throw new ProviderError('Request aborted by client.', 'CLIENT_ABORTED', 499);
-      }
-      signal.addEventListener('abort', onAbort, { once: true });
-    }
+    const timeoutSignal = AbortSignal.timeout(this.timeoutMs);
+    const requestSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
     try {
       return await fetch(`${this.baseUrl}${path}`, {
         method: 'POST',
         headers: this.#headers(),
         body: JSON.stringify(body),
-        signal: controller.signal,
+        signal: requestSignal,
       });
     } catch (err) {
-      if (err?.name === 'AbortError') {
-        if (signal?.aborted) throw new ProviderError('Request aborted by client.', 'CLIENT_ABORTED', 499);
+      if (signal?.aborted) {
+        throw new ProviderError('Request aborted by client.', 'CLIENT_ABORTED', 499);
+      }
+      if (timeoutSignal.aborted || err?.name === 'TimeoutError') {
         throw new ProviderError('Gemini request timed out.', 'PROVIDER_TIMEOUT', 504);
       }
       throw new ProviderError(`Cannot reach Gemini: ${err.message}`, 'PROVIDER_UNREACHABLE', 502);
-    } finally {
-      clearTimeout(timer);
-      if (signal) signal.removeEventListener('abort', onAbort);
     }
   }
 
   async #throwIfNotOk(res) {
     if (res.ok) return;
-    let detail = '';
+    const raw = await res.text().catch(() => '');
+    let detail = raw;
     try {
-      const data = await res.json();
-      detail = data?.error?.message ?? data?.message ?? JSON.stringify(data);
-    } catch {
-      detail = await res.text().catch(() => '');
-    }
+      const data = JSON.parse(raw);
+      detail = data?.error?.message ?? data?.message ?? raw;
+    } catch { /* Keep the raw response text for non-JSON errors. */ }
     const code = res.status === 401 || res.status === 403 ? 'PROVIDER_AUTH_FAILED'
       : res.status === 404 ? 'MODEL_NOT_FOUND'
       : res.status === 429 ? 'PROVIDER_RATE_LIMITED'
@@ -110,6 +100,11 @@ export class GeminiProvider extends AIProvider {
           }
         }
       }
+    } catch (err) {
+      if (signal?.aborted) {
+        throw new ProviderError('Request aborted by client.', 'CLIENT_ABORTED', 499);
+      }
+      throw err;
     } finally {
       reader.cancel().catch(() => {});
     }
