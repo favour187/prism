@@ -27,7 +27,7 @@ Powered by **Grok (xAI)** · Streaming SSE · Vision + OCR fallback · SQLite me
 
 ### 🎤 Voice (hears you, speaks back)
 - Tap the 🎤, talk, tap again — Prism **transcribes your speech** (backend STT; audio never stored) into the message box
-- Prism **speaks the answers aloud** (system voice; markdown-aware: code blocks are summarized, not spelled out) — toggle 🔊/🔇 in the header
+- Prism **speaks answers aloud** (system voice; markdown-aware: code blocks are summarized, not spelled out) — toggle 🔊/🔇 in the header
 - Works in the web app, the desktop overlay, and the Android panel
 
 ### 📸 Screen assistant — one bar, everywhere
@@ -67,7 +67,7 @@ AI Orchestrator
 ```
 
 **Swappable providers:** the orchestrator only depends on `server/providers/base.js`.
-Implement the same interface to move off Featherless later without touching the rest of the app.
+Implement the same interface to switch providers later without touching the rest of the app.
 
 ---
 
@@ -111,10 +111,10 @@ Without a disk, everything still works — data is just ephemeral per deploy.
 | Variable | Default | Purpose |
 |---|---|---|
 | `GROK_API_KEY` | — | **Required** (server-side secret) |
-| `GROK_BASE_URL` | `https://api.featherless.ai/v1` | OpenAI-compatible endpoint |
+| `GROK_BASE_URL` | `https://api.x.ai/v1` | OpenAI-compatible endpoint |
 | `GROK_CHAT_MODEL` | `grok-4.7` | Default chat model |
 | `GROK_VISION_MODEL` | `grok-4.7` | Vision model for screenshots/images |
-| `AI_PROVIDER` | `featherless` | `featherless` or `mock` (dev/CI only; visibly flagged in UI) |
+| `AI_PROVIDER` | `grok` | `grok`, `featherless`, or `mock` (dev/CI only; visibly flagged in UI) |
 | `PORT` / `HOST` | `4000` / `0.0.0.0` | Bind address |
 | `DATA_DIR` | `server/data` | SQLite DB + uploads location |
 | `MAX_UPLOAD_MB`, `MAX_UPLOAD_FILES` | `12`, `6` | Upload limits |
