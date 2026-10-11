@@ -1,7 +1,7 @@
 {
   "name": "prism-server",
   "version": "1.0.0",
-  "description": "Prism — AI screen & code assistant backend (Featherless-powered)",
+  "description": "Prism — AI screen & code assistant backend (Gemini primary, Groq backup)",
   "type": "module",
   "private": true,
   "main": "index.js",
