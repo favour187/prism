@@ -12,13 +12,13 @@ services:
       - key: NODE_VERSION
         value: 20
       - key: AI_PROVIDER
-        value: grok
-      - key: GROK_API_KEY
+        value: groq
+      - key: GROQ_API_KEY
         sync: false          # set this in the Render dashboard (server-side secret)
-      - key: GROK_CHAT_MODEL
-        value: grok-4.7
-      - key: GROK_VISION_MODEL
-        value: grok-4.7
+      - key: GROQ_CHAT_MODEL
+        value: qwen/qwen3.8-27b
+      - key: GROQ_VISION_MODEL
+        value: qwen/qwen3.8-27b
       - key: DATA_DIR
         value: /var/data
     disk:
