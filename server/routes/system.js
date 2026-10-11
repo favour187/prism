@@ -31,12 +31,13 @@ router.get('/config', async (_req, res, next) => {
   try {
     const provider = getProvider();
     let models = await cachedModels(provider);
+    const providerConfig = config[provider.id] ?? config.grok;
     res.json({
       app: { name: 'Prism', version: '1.0.0' },
       provider: { id: provider.id, ready: provider.isReady(), reason: provider.isReady() ? null : provider.notReadyReason() },
       defaults: {
-        chatModel: config.featherless.chatModel,
-        visionModel: config.featherless.visionModel,
+        chatModel: providerConfig.chatModel,
+        visionModel: providerConfig.visionModel,
       },
       models,
       tools: listTools(),
