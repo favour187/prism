@@ -96,7 +96,9 @@ export default function App() {
     setPendingFiles([]);
     setPendingScreenshots([]);
     setPendingAction(null);
-    lastPayloadRef.current = payload;
+    // A fresh conversation must not inherit the previous turn's retry payload.
+    lastPayloadRef.current = null;
+    streamTextRef.current = '';
     if (window.innerWidth <= 900) setSidebarOpen(false);
   }, []);
 
