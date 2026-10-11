@@ -189,7 +189,7 @@ To build locally: `cd desktop && npm install && npm run dist`.
 ## Tests
 
 ```bash
-npm test   # boots the real server (mock provider) and runs 31 end-to-end checks:
+npm test   # boots the real server (mock provider) and runs 44 end-to-end checks:
            # SSE streaming, persistence, uploads (+secret blocking), vision path,
            # code actions, search, privacy export, rate limits, error envelopes
 ```
