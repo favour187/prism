@@ -895,3 +895,191 @@ body { letter-spacing: 0.1px; }
   background: var(--surface-3);
   color: var(--text-bright);
 }
+
+
+/* Prism UI refresh — cleaner hierarchy, calmer contrast, and mobile-friendly controls. */
+:root {
+  --accent: #8b7cff;
+  --accent-2: #55d6e8;
+  --radius: 16px;
+  --radius-sm: 11px;
+}
+html[data-theme='dark'] {
+  --bg: #0b0d12;
+  --bg-2: #11151e;
+  --bg-3: #191f2b;
+  --panel: rgba(17, 21, 30, .96);
+  --border: #252d3c;
+  --text: #edf1f8;
+  --text-dim: #a5afc1;
+  --text-faint: #737f93;
+  --accent-soft: rgba(139, 124, 255, .17);
+  --shadow: 0 24px 70px rgba(0, 0, 0, .38);
+}
+html[data-theme='light'] {
+  --bg: #f6f7fb;
+  --bg-2: #ffffff;
+  --bg-3: #f0f2f8;
+  --panel: rgba(255, 255, 255, .97);
+  --border: #e4e7ef;
+  --text: #202535;
+  --text-dim: #606b7e;
+  --text-faint: #8b95a7;
+  --accent: #6556e8;
+  --accent-2: #168da6;
+  --accent-soft: rgba(101, 86, 232, .10);
+}
+body {
+  background:
+    radial-gradient(ellipse at 72% -12%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 36%),
+    var(--bg);
+}
+button, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+.sidebar {
+  background: color-mix(in srgb, var(--bg-2) 94%, var(--accent) 6%);
+  border-right-color: color-mix(in srgb, var(--border) 82%, transparent);
+}
+.brand-mark {
+  border-radius: 11px;
+  box-shadow: 0 5px 20px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.chat-header {
+  min-height: 64px;
+  padding-inline: clamp(12px, 2.2vw, 26px);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  backdrop-filter: blur(18px);
+}
+.icon-btn, .btn, .view-tab, .msg-action, .suggestion-btn, .composer button {
+  transition: background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+.icon-btn:hover, .btn:hover, .msg-action:hover {
+  transform: translateY(-1px);
+}
+.view-tabs {
+  padding: 12px clamp(12px, 2.2vw, 26px) 0;
+  gap: 7px;
+}
+.view-tab {
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 9px 15px;
+  background: transparent;
+}
+.view-tab.active {
+  background: var(--bg-2);
+  border-color: var(--border);
+  box-shadow: 0 5px 18px rgba(0, 0, 0, .07), inset 0 -2px 0 var(--accent);
+}
+.chat-scroll {
+  scroll-behavior: smooth;
+  scrollbar-gutter: stable;
+}
+.welcome {
+  width: min(900px, 100%);
+  margin: auto;
+  padding: clamp(30px, 6vh, 68px) clamp(16px, 4vw, 40px) 28px;
+}
+.welcome-badge {
+  width: 58px;
+  height: 58px;
+  border-radius: 19px;
+  background: linear-gradient(140deg, var(--accent), var(--accent-2));
+  box-shadow: 0 12px 34px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.welcome h2 {
+  margin-top: 22px;
+  letter-spacing: -.045em;
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1.08;
+}
+.welcome-sub {
+  max-width: 570px;
+  line-height: 1.65;
+}
+.suggestions {
+  gap: 12px;
+  margin-top: 30px;
+}
+.suggestion-btn {
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--bg-2) 90%, var(--accent) 10%);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .04);
+}
+.suggestion-btn:hover {
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+  background: var(--bg-2);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+.msg-list {
+  width: min(900px, 100%);
+  padding-inline: clamp(14px, 3vw, 32px);
+}
+.msg {
+  gap: 14px;
+  padding-block: 21px;
+}
+.msg-avatar {
+  flex-shrink: 0;
+  border-radius: 12px;
+}
+.msg-content {
+  line-height: 1.75;
+  font-size: 14.5px;
+}
+.msg-content p { margin: 0 0 13px; }
+.msg-content pre {
+  border-radius: 13px;
+  border-color: var(--border);
+}
+.composer {
+  padding: 12px clamp(12px, 2.2vw, 26px) max(14px, env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bg) 94%, transparent) 22%);
+}
+.composer-inner, .composer-box {
+  border-radius: 20px;
+  border-color: color-mix(in srgb, var(--border) 84%, var(--accent) 16%);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, .10);
+}
+.composer textarea {
+  line-height: 1.6;
+}
+.composer:focus-within .composer-inner, .composer:focus-within .composer-box {
+  border-color: color-mix(in srgb, var(--accent) 68%, var(--border));
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 12px 36px rgba(0, 0, 0, .10);
+}
+.toast {
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+}
+.modal {
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+}
+.desk-doc, .desk-instruct-input {
+  border-radius: 15px;
+}
+@media (max-width: 700px) {
+  :root { --sidebar-w: min(86vw, 320px); }
+  .chat-header { min-height: 58px; gap: 8px; }
+  .view-tabs { padding-top: 8px; }
+  .view-tab { flex: 1; text-align: center; padding: 10px 8px; }
+  .welcome { padding: 34px 18px 24px; }
+  .welcome h2 { font-size: 30px; }
+  .suggestions { grid-template-columns: 1fr; }
+  .msg-list { padding-inline: 12px; }
+  .msg { gap: 10px; padding-block: 16px; }
+  .msg-content { font-size: 14px; }
+  .composer { padding-inline: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
