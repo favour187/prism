@@ -19,7 +19,7 @@ const config = {
   aiProvider: (process.env.AI_PROVIDER ?? 'gemini').toLowerCase(),
   gemini: {
     apiKey: process.env.GEMINI_API_KEY ?? '',
-    baseUrl: (process.env.GEMINI_BASE_URL ?? 'https://generativelanguage.googleapis.com/v1beta/openai').replace(/\\/$/, ''),
+    baseUrl: (process.env.GEMINI_BASE_URL ?? 'https://generativelanguage.googleapis.com/v1beta/openai').replace(/\/$/, ''),
     chatModel: process.env.GEMINI_CHAT_MODEL ?? 'gemini-3.8-flash',
     visionModel: process.env.GEMINI_VISION_MODEL ?? 'gemini-3.8-flash',
     timeoutMs: num(process.env.GEMINI_TIMEOUT_MS, 120_000),
