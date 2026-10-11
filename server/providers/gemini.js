@@ -15,7 +15,7 @@ export class GeminiProvider extends AIProvider {
   }
 
   notReadyReason() {
-    return 'Neither GEMINI_API_KEY nor GROQ_API_KEY is configured on the server.';
+    return 'GEMINI_API_KEY is not configured on the server.';
   }
 
   #assertReady() {
