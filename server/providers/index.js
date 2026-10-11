@@ -7,7 +7,9 @@ import { MockProvider } from './mock.js';
 let cached = null;
 
 class GeminiWithGroqFallback {
-  id = 'gemini';
+  get id() {
+    return this.primary.isReady() ? 'gemini' : 'groq';
+  }
 
   constructor(primary, backup) {
     this.primary = primary;
@@ -63,9 +65,14 @@ class GeminiWithGroqFallback {
     if (!this.backup.isReady()) {
       throw new Error('Gemini failed and Groq backup is not configured. Set GEMINI_API_KEY and GROQ_API_KEY.');
     }
+    const fallbackModel = imageRequest ? config.groq.visionModel : config.groq.chatModel;
+    yield {
+      notice: 'Gemini is unavailable for this request; switching to the Groq backup.',
+      meta: { provider: 'groq', model: fallbackModel, vision: imageRequest ? 'vision' : 'none' },
+    };
     yield* this.backup.streamChat({
       ...opts,
-      model: imageRequest ? config.groq.visionModel : config.groq.chatModel,
+      model: fallbackModel,
     });
   }
 
