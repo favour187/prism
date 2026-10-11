@@ -16,7 +16,16 @@ const config = {
   dataDir: process.env.DATA_DIR ?? path.join(__dirname, 'data'),
   clientDist: process.env.CLIENT_DIST ?? path.join(__dirname, '..', 'client', 'dist'),
 
-  aiProvider: (process.env.AI_PROVIDER ?? 'featherless').toLowerCase(),
+  aiProvider: (process.env.AI_PROVIDER ?? 'grok').toLowerCase(),
+  grok: {
+    apiKey: process.env.GROK_API_KEY ?? process.env.XAI_API_KEY ?? '',
+    baseUrl: (process.env.GROK_BASE_URL ?? 'https://api.x.ai/v1').replace(/\\/$/, ''),
+    chatModel: process.env.GROK_CHAT_MODEL ?? 'grok-4.7',
+    visionModel: process.env.GROK_VISION_MODEL ?? 'grok-4.7',
+    timeoutMs: num(process.env.GROK_TIMEOUT_MS, 120_000),
+    maxTokens: num(process.env.GROK_MAX_TOKENS, 4096),
+    temperature: Number.isFinite(Number(process.env.GROK_TEMPERATURE)) ? Number(process.env.GROK_TEMPERATURE) : 0.6,
+  },
   featherless: {
     apiKey: process.env.FEATHERLESS_API_KEY ?? '',
     baseUrl: (process.env.FEATHERLESS_BASE_URL ?? 'https://api.featherless.ai/v1').replace(/\/$/, ''),
