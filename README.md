@@ -2,10 +2,9 @@
 
 # ◮ Prism
 
-**An AI screen & code assistant** — inspired by Arc's screen assistant, built for developers.
-Chat normally, attach project files, or capture your screen **on demand** and ask about what you see.
+**An AI screen & code assistant** — chat normally, attach project files, or capture your screen on demand.
 
-Powered by **GroqCloud (free API tier)** · Streaming SSE · Vision + OCR fallback · SQLite memory · React + Express
+Powered by **Gemini primary + automatic Groq fallback** · Streaming responses · Vision + local OCR fallback · Groq Whisper speech-to-text · SQLite memory · React + Express
 
 </div>
 
@@ -13,235 +12,54 @@ Powered by **GroqCloud (free API tier)** · Streaming SSE · Vision + OCR fallba
 
 ## Features
 
-### 💬 Core chat
-- Natural streaming conversations (SSE, token-by-token) with Groq-hosted models.
-- Markdown rendering with **syntax-highlighted code blocks**, copy buttons, and per-block **Explain / Fix / Improve** actions.
-- **Multiple conversations**, full history, rename/delete, and **search across titles and message content**.
-- Conversation + project context is kept per session (configurable memory window).
+- **Streaming AI chat:** Gemini is primary; when Gemini is unavailable, rate-limited, or rejects a request before producing text, Prism retries with Groq.
+- **Screen and image understanding:** Gemini vision first, Groq vision fallback, then local Tesseract OCR if both vision attempts fail.
+- **OCR:** Tesseract runs on the server as a fallback for readable text in screenshots. OCR quality depends on image clarity and language.
+- **Voice input:** Groq Whisper (whisper-large-v3-turbo) transcribes audio into text. This requires GROQ_API_KEY.
+- **Spoken answers:** Uses the browser/device system speech engine.
+- **Coding tools:** Markdown/code rendering, copy buttons, Explain / Fix / Improve / Generate actions.
+- **Conversation memory:** Create, rename, delete, search, and revisit conversations.
+- **File attachments:** Supported files are validated and text-extracted server-side.
+- **Screen assistant:** On-demand screenshot capture, optional watch/narration features, and floating assistant controls where supported by the desktop/Android shell.
+- **Writing desk:** Draft, transform, undo, copy/download, and send a draft to chat for review.
+- **Privacy controls:** API keys remain server-side; captures are opt-in; data export and wipe controls are available.
 
-### 🛠 Developer-first coding experience
-- Exceptional at debugging, code generation, refactoring, architecture, APIs, Git, terminals, IDEs, web, mobile, databases, DevOps.
-- Automatic language detection, complete corrected code (formatting/indentation preserved, no gratuitous rewrites), alternative-implementation comparisons.
-- **Attach real project files** (code, PDF, DOCX) — they're text-extracted server-side and injected as authoritative codebase context, so you don't have to rely on screenshots.
-- `Explain` / `Fix` / `Improve` / `Generate` actions (from the composer _or_ hovering any code block).
+## Provider setup
 
-### 🎤 Voice (hears you, speaks back)
-- Tap the 🎤, talk, tap again — Prism transcribes speech through Groq's Whisper endpoint (audio is processed for transcription) into the message box
-- Prism **speaks answers aloud** (system voice; markdown-aware: code blocks are summarized, not spelled out) — toggle 🔊/🔇 in the header
-- Works in the web app, the desktop overlay, and the Android panel
+1. Create a Gemini API key in Google AI Studio: https://aistudio.google.com/
+2. Create a Groq API key in Groq Console: https://console.groq.com/
+3. Set GEMINI_API_KEY and GROQ_API_KEY in your server environment (Render: Dashboard → Prism → Environment).
+4. Keep AI_PROVIDER=gemini and deploy the latest main branch.
 
-### 📸 Screen assistant — one bar, everywhere
-- **Ctrl/⌘ + Shift + A** toggles the floating assistant panel (always-on-top in the desktop/Android apps).
-- **One universal command bar — in the overlay AND the main app**: type to ask · **`/`** opens the command palette (assistant, voice, files, spoken answers…) · typed text surfaces **inline write-style chips** that rewrite it in place (Enter sends, Esc restores).
-- **Write tab in the main app** (the "other things"): a full writing desk — draft anything, transform with style chips or a **free-form instruction** ("make this a polite rejection email"), undo freely, then copy / insert / download / **Discuss in chat** for a review pass.
-- **Click, never hotkeys (if you don't want them)**: the assistant toggles from a **thin edge line** at the screen edge (draggable), and the desktop app adds an obvious **circle launcher** into the main app. Hotkeys still work everywhere for power users.
-- **Arc-style writing, system-wide (desktop)**: select text in **any app** → **Ctrl/⌘+Shift+R** → a floating bar rewrites it → **Enter pastes it straight back** into that app. **Ctrl/⌘+Shift+G** asks about the selection. **Ctrl/⌘+Shift+W** toggles Watch from anywhere.
-- **◉ Watch mode** (opt-in): samples your screen and keeps a screenshot **only when something visibly moves** — with optional ✨ **narration**, the vision model describes each change in the thread as it happens. Sensitivity low/med/high.
-- **Panel sizing**: live measurements, S/M/L presets, drag-to-resize (desktop).
-- **Privacy by design: no continuous recording.** Captures — single or motion-triggered — only happen when you start them.
-- Captures route through Groq vision → **OCR fallback** (Tesseract) when vision is unavailable, so terminal output / error dialogs still get analyzed.
+Gemini uses the OpenAI-compatible endpoint at https://generativelanguage.googleapis.com/v1beta/openai with gemini-3.8-flash by default. Verify model availability and current free-tier quotas in Google AI Studio. Groq uses its configured chat/vision model as a backup and Whisper for transcription. Both providers' free quotas and model access can change.
 
-### 🔐 Security & privacy
-- Groq API keys exist **only on the server** — the browser never sees them.
-- Upload validation: extension/MIME/magic-byte checks, size limits, and blocking of secret material (`.env`, keys, certs).
-- Rate limiting (general / chat / upload tiers), Helmet CSP, structured error envelopes.
-- Settings → Privacy: **export all your data** or **wipe everything** in one click.
-
----
-
-## Architecture
-
-```
-Client (React SPA / optional Electron shell)
-   │  REST + SSE, no secrets
-   ▼
-Backend API (Express, helmet, rate limits, validation)
-   ▼
-AI Orchestrator
-   ├── GroqCloud (free API tier)        (primary — OpenAI-compatible /v1/chat/completions)
-   ├── Vision routing        (screenshots & attached images → vision model)
-   ├── OCR fallback          (tesseract.js, when vision unavailable)
-   ├── Conversation memory   (SQLite: conversations / messages / attachments)
-   ├── File & context proc.  (code, PDF, DOCX → text; images → normalized buffers)
-   └── Tool system           (Explain / Fix / Improve / Generate prompt tools)
-```
-
-**Swappable providers:** the orchestrator only depends on `server/providers/base.js`.
-Implement the same interface to switch providers later without touching the rest of the app.
-
----
-
-## Quick start (local)
+## Local development
 
 ```bash
-# 1. install everything
 npm run setup
-
-# 2. configure the server
-cp .env.example server/.env        # then edit it
-#    set GROQ_API_KEY=your_key_here
-#    (or, just to try the UI without a key, set AI_PROVIDER=mock — clearly flagged in the UI)
-
-# 3. run (server: 4000, client dev server with proxy: 5173)
+cp .env.example server/.env
+# Add GEMINI_API_KEY and GROQ_API_KEY to server/.env
 npm run dev
 ```
 
-Open http://localhost:5173 — chat, press **Ctrl/⌘+Shift+A**, attach a file, ship.
-
-### Production (single process, how Render runs it)
-
-```bash
-npm run build   # installs deps + builds client into client/dist
-npm start       # Express serves both /api/* and the built SPA on $PORT
-```
+Open http://localhost:5173.
 
 ## Deploying to Render
 
-This repo includes [`render.yaml`](render.yaml) (Blueprint):
+The repository includes render.yaml. Set both GEMINI_API_KEY and GROQ_API_KEY as secrets when creating/updating the service. The keys must not be added to frontend variables or committed to Git.
 
-1. Push this repo to GitHub.
-2. Render dashboard → **New → Blueprint** → pick the repo.
-3. Set the secret `GROQ_API_KEY` when prompted (it's marked `sync: false`).
-4. Done — health checks hit `/api/health`, and a 1 GB disk is mounted at `/var/data` for the SQLite DB + uploads (`DATA_DIR=/var/data`).
+## Verification status
 
-Without a disk, everything still works — data is just ephemeral per deploy.
-
-## Configuration (environment variables)
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `GROQ_API_KEY` | — | **Required** (server-side secret) |
-| `GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | OpenAI-compatible endpoint |
-| `GROQ_CHAT_MODEL` | `qwen/qwen3.8-27b` | Default chat model |
-| `GROQ_VISION_MODEL` | `qwen/qwen3.8-27b` | Vision model for screenshots/images |
-| `GROQ_STT_MODEL` | `whisper-large-v3-turbo` | Speech-to-text model |
-| `AI_PROVIDER` | `groq` | `groq`, `featherless`, or `mock` (dev/CI only; visibly flagged in UI) |
-| `PORT` / `HOST` | `4000` / `0.0.0.0` | Bind address |
-| `DATA_DIR` | `server/data` | SQLite DB + uploads location |
-| `MAX_UPLOAD_MB`, `MAX_UPLOAD_FILES` | `12`, `6` | Upload limits |
-| `HISTORY_MESSAGES` | `24` | Memory window per conversation |
-| `MAX_CONTEXT_FILES_CHARS`, `MAX_FILE_CHARS` | `180000`, `40000` | File context budgets |
-| `RATE_LIMIT_*` | see `.env.example` | Rate limiting tiers |
-| `CORS_ORIGINS` | — | Extra origins when the frontend is hosted elsewhere |
-
-## API overview
-
-| Route | Description |
-|---|---|
-| `POST /api/chat` | Streaming chat turn (SSE events: `meta` / `delta` / `notice` / `done` / `error`) — supports `attachmentIds`, `screenshots` (data URLs), `action` + `selection`, `model` |
-| `POST /api/chat/regenerate` | Re-answer the last user question in a conversation — deletes the previous assistant reply and re-streams. Body: `{ conversationId, model? }` |
-| `GET /api/conversations?query=` | List / search conversations |
-| `POST /api/conversations` · `GET/PATCH/DELETE /api/conversations/:id` | CRUD + history |
-| `POST /api/uploads` | Validated multipart uploads; text extraction; image normalization |
-| `GET /api/uploads/:id/raw` | Inline preview of uploaded images |
-| `GET /api/config` | Non-secret public config (provider readiness, models, limits) |
-| `GET /api/health` | Liveness/readiness |
-| `GET /api/privacy/export` · `DELETE /api/privacy/data` | Data export / wipe |
-
-## Android app (floating over other apps)
-
-`android/` is a native Kotlin app — the Arc-style screen assistant on your phone:
-
-- **Chat-first** — opening Prism goes straight into the assistant panel; no manual start step
-- **Thin edge-line handle** (not a bubble) sits at the screen edge; drag it anywhere, tap to reopen the panel
-- **⚡ Answer in one tap** — capture your screen and get a reply in seconds (JPEG frames are smaller and faster than PNG); answers stream into the small panel
-- **Screenshot** = Android's own MediaProjection consent dialog gates each capture; exactly one frame is taken, then the projection is torn down (never continuous)
-- **Region capture** = capture a frame, then drag-crop inside the panel
-- **The APK is built by GitHub Actions** — see **Actions → Android APK → Artifacts** after every push
-
-Setup & build details: [`android/README.md`](android/README.md).
-
-## Desktop app (Arc-style floating assistant)
-
-The `desktop/` folder is a real Electron app — this is the experience closest to Arc's screen assistant:
-
-- **Frameless, always-on-top mini window** that floats over all your apps
-- **True global hotkey** Ctrl/⌘+Shift+A → toggles it from anywhere in the OS
-- **Direct capture** (no browser picker dialogs): whole screen, a picker of your open windows, or a **drag-select region** with a transparent snipping overlay
-- The panel hides itself while capturing so it never appears in your screenshots, then comes back
-- Answer streams in the small toggle window; pin/unpin, hide, and ⤢ opens the full chat
-- Still privacy-first: one frame per explicit click, never continuous recording
-
-```bash
-cd desktop
-npm install          # downloads Electron (~100 MB)
-npm start            # uses the deployed app (https://prism-yks3.onrender.com)
-# or against your local stack:
-PRISM_URL=http://localhost:5173 npm run dev
-```
-
-Environment knobs: `PRISM_URL`, `PRISM_SHORTCUT`, `PRISM_WIDTH`, `PRISM_HEIGHT`.
-
-The same compact UI is also available in any browser at **`/?overlay=1`** (uses the browser's native picker for captures — the Electron build skips the dialogs).
-
-**Installers are built by GitHub Actions** on every push that touches `desktop/` —
-**Actions → Desktop installers → Artifacts**:
-
-| Platform | Artifact |
-|---|---|
-| Windows | `prism-desktop-win-x64.exe` (NSIS installer) + `.exe` portable |
-| macOS | `.dmg` + `.zip` (unsigned — right-click → Open) |
-| Linux | `.AppImage` + `.deb` |
-
-To build locally: `cd desktop && npm install && npm run dist`.
-
-> macOS: grant **Screen Recording** to Prism on first capture. Quit with `Ctrl/⌘+Shift+Q`.
+The repository includes a smoke test suite using the mock provider. Passing those tests verifies app routes and UI/server integration, not live Gemini/Groq account access. Live provider behavior also depends on valid keys, quotas, model availability, and the deployed service. After deployment, verify:
+- /api/health reports the app is healthy and provider readiness is true.
+- A normal chat streams a response.
+- A screenshot is analyzed; if both vision providers fail, OCR fallback is invoked.
+- Voice input produces a transcript using Groq Whisper.
+- Desktop/Android capture controls require their platform-specific permissions and are not guaranteed by the web build alone.
 
 ## Tests
 
 ```bash
-npm test   # boots the real server (mock provider) and runs 44 end-to-end checks:
-           # SSE streaming, persistence, uploads (+secret blocking), vision path,
-           # code actions, search, privacy export, rate limits, error envelopes
+npm test
+npm run build
 ```
-
-## Project structure
-
-```
-prism/
-├── server/                 # Express backend
-│   ├── providers/          # base interface · featherless · mock (dev-only)
-│   ├── memory/store.js     # SQLite: conversations, messages, attachments
-│   ├── orchestrator.js     # memory → files → vision/OCR → provider → persistence
-│   ├── tools/              # Explain / Fix / Improve / Generate prompt tools
-│   ├── utils/              # images (sharp), ocr (tesseract), file processor
-│   ├── routes/ middleware/ # chat (SSE), conversations, uploads, system, limits
-│   └── tests/smoke.test.mjs
-├── client/                 # React (Vite) SPA
-│   └── src/components/     # sidebar, chat, code blocks, composer, screen assistant…
-├── desktop/                # optional Electron shell (global hotkey, always-on-top)
-├── render.yaml             # Render Blueprint
-└── .env.example
-```
-
-## Notes
-
-- The `mock` provider exists **only** for keyless local development/CI (`AI_PROVIDER=mock`) and is visibly badged in the UI. Production defaults to GroqCloud; requests are subject to Groq's free-tier limits.
-- Models are user-selectable per-chat in the header; defaults come from env. Pick whichever chat/vision models your Featherless account exposes.
-- **Server model list is cached** for 10 minutes per process, so repeated `/api/config` hits (web app + overlay + Android + desktop) don't re-list from the provider.
-
-## Keyboard shortcuts (Arc-style)
-
-| Shortcut | Where | Action |
-|---|---|---|
-| `Ctrl/⌘+Shift+A` | web + desktop global | Toggle the screen assistant / floating panel |
-| `Ctrl/⌘+K` | web + desktop global | Command bar — focus search / overlay input |
-| `Ctrl/⌘+N` | web | New conversation |
-| `Ctrl/⌘+J` | web | Toggle the sidebar |
-| `Ctrl/⌘+,` | web | Settings |
-| `Ctrl/⌘+Shift+R` | desktop global | Rewrite the selected text in any app (inline write bar) |
-| `Ctrl/⌘+Shift+G` | desktop global | Ask about the selected text |
-| `Ctrl/⌘+Shift+W` | desktop global | Toggle Watch mode |
-| `Ctrl/⌘+Shift+Q` | desktop | Quit |
-
-## Quality: local build & test
-
-```bash
-npm run build   # client (Vite) → client/dist
-npm test        # 44 end-to-end checks (mock provider)
-```
-
-## Deployment notes
-
-- `node`: **20.x** (see `.nvmrc`)
-
