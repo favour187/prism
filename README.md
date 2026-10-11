@@ -5,7 +5,7 @@
 **An AI screen & code assistant** — inspired by Arc's screen assistant, built for developers.
 Chat normally, attach project files, or capture your screen **on demand** and ask about what you see.
 
-Powered by **Grok (xAI)** · Streaming SSE · Vision + OCR fallback · SQLite memory · React + Express
+Powered by **GroqCloud (free API tier)** · Streaming SSE · Vision + OCR fallback · SQLite memory · React + Express
 
 </div>
 
@@ -14,7 +14,7 @@ Powered by **Grok (xAI)** · Streaming SSE · Vision + OCR fallback · SQLite me
 ## Features
 
 ### 💬 Core chat
-- Natural streaming conversations (SSE, token-by-token) with Grok models via xAI.
+- Natural streaming conversations (SSE, token-by-token) with Groq-hosted models.
 - Markdown rendering with **syntax-highlighted code blocks**, copy buttons, and per-block **Explain / Fix / Improve** actions.
 - **Multiple conversations**, full history, rename/delete, and **search across titles and message content**.
 - Conversation + project context is kept per session (configurable memory window).
@@ -39,10 +39,10 @@ Powered by **Grok (xAI)** · Streaming SSE · Vision + OCR fallback · SQLite me
 - **◉ Watch mode** (opt-in): samples your screen and keeps a screenshot **only when something visibly moves** — with optional ✨ **narration**, the vision model describes each change in the thread as it happens. Sensitivity low/med/high.
 - **Panel sizing**: live measurements, S/M/L presets, drag-to-resize (desktop).
 - **Privacy by design: no continuous recording.** Captures — single or motion-triggered — only happen when you start them.
-- Captures route through Grok vision → **OCR fallback** (Tesseract) when vision is unavailable, so terminal output / error dialogs still get analyzed.
+- Captures route through Groq vision → **OCR fallback** (Tesseract) when vision is unavailable, so terminal output / error dialogs still get analyzed.
 
 ### 🔐 Security & privacy
-- Grok API keys exist **only on the server** — the browser never sees them.
+- Groq API keys exist **only on the server** — the browser never sees them.
 - Upload validation: extension/MIME/magic-byte checks, size limits, and blocking of secret material (`.env`, keys, certs).
 - Rate limiting (general / chat / upload tiers), Helmet CSP, structured error envelopes.
 - Settings → Privacy: **export all your data** or **wipe everything** in one click.
@@ -58,7 +58,7 @@ Client (React SPA / optional Electron shell)
 Backend API (Express, helmet, rate limits, validation)
    ▼
 AI Orchestrator
-   ├── Grok (xAI)        (primary — OpenAI-compatible /v1/chat/completions)
+   ├── GroqCloud (free API tier)        (primary — OpenAI-compatible /v1/chat/completions)
    ├── Vision routing        (screenshots & attached images → vision model)
    ├── OCR fallback          (tesseract.js, when vision unavailable)
    ├── Conversation memory   (SQLite: conversations / messages / attachments)
@@ -79,7 +79,7 @@ npm run setup
 
 # 2. configure the server
 cp .env.example server/.env        # then edit it
-#    set GROK_API_KEY=your_key_here
+#    set GROQ_API_KEY=your_key_here
 #    (or, just to try the UI without a key, set AI_PROVIDER=mock — clearly flagged in the UI)
 
 # 3. run (server: 4000, client dev server with proxy: 5173)
@@ -101,7 +101,7 @@ This repo includes [`render.yaml`](render.yaml) (Blueprint):
 
 1. Push this repo to GitHub.
 2. Render dashboard → **New → Blueprint** → pick the repo.
-3. Set the secret `GROK_API_KEY` when prompted (it's marked `sync: false`).
+3. Set the secret `GROQ_API_KEY` when prompted (it's marked `sync: false`).
 4. Done — health checks hit `/api/health`, and a 1 GB disk is mounted at `/var/data` for the SQLite DB + uploads (`DATA_DIR=/var/data`).
 
 Without a disk, everything still works — data is just ephemeral per deploy.
@@ -110,10 +110,10 @@ Without a disk, everything still works — data is just ephemeral per deploy.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `GROK_API_KEY` | — | **Required** (server-side secret) |
-| `GROK_BASE_URL` | `https://api.x.ai/v1` | OpenAI-compatible endpoint |
-| `GROK_CHAT_MODEL` | `grok-4.7` | Default chat model |
-| `GROK_VISION_MODEL` | `grok-4.7` | Vision model for screenshots/images |
+| `GROQ_API_KEY` | — | **Required** (server-side secret) |
+| `GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | OpenAI-compatible endpoint |
+| `GROQ_CHAT_MODEL` | `qwen/qwen3.8-27b` | Default chat model |
+| `GROQ_VISION_MODEL` | `qwen/qwen3.8-27b` | Vision model for screenshots/images |
 | `AI_PROVIDER` | `grok` | `grok`, `featherless`, or `mock` (dev/CI only; visibly flagged in UI) |
 | `PORT` / `HOST` | `4000` / `0.0.0.0` | Bind address |
 | `DATA_DIR` | `server/data` | SQLite DB + uploads location |
