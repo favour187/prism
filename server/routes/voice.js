@@ -42,7 +42,7 @@ router.post('/', chatLimiter, (req, res, next) => {
             message:
               provider.id === 'featherless'
                 ? 'Set FEATHERLESS_API_KEY (and FEATHERLESS_STT_MODEL) to enable voice input.'
-                : 'This AI provider does not offer speech-to-text.',
+                : 'Voice transcription is not available with the selected AI provider. You can still type messages and use screen/image analysis.',
           },
         });
       }
