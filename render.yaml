@@ -1,10 +1,10 @@
 # Render Blueprint — deploys Prism as a single web service.
-# https://render.com/docs/blueprint-spec
+# Set both provider keys in the Render dashboard; never commit actual secrets.
 services:
   - type: web
     name: prism
     runtime: node
-    plan: starter            # a disk-backed plan is recommended for SQLite persistence
+    plan: starter
     buildCommand: npm run build
     startCommand: npm start
     healthCheckPath: /api/health
@@ -12,15 +12,23 @@ services:
       - key: NODE_VERSION
         value: 20
       - key: AI_PROVIDER
-        value: groq
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_CHAT_MODEL
+        value: gemini-3.8-flash
+      - key: GEMINI_VISION_MODEL
+        value: gemini-3.8-flash
       - key: GROQ_API_KEY
-        sync: false          # set this in the Render dashboard (server-side secret)
+        sync: false
       - key: GROQ_CHAT_MODEL
         value: qwen/qwen3.8-27b
       - key: GROQ_VISION_MODEL
         value: qwen/qwen3.8-27b
       - key: GROQ_STT_MODEL
         value: whisper-large-v3-turbo
+      - key: GROQ_STT_BASE_URL
+        value: https://api.groq.com/openai/v1
       - key: DATA_DIR
         value: /var/data
     disk:
