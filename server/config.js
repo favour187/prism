@@ -16,7 +16,16 @@ const config = {
   dataDir: process.env.DATA_DIR ?? path.join(__dirname, 'data'),
   clientDist: process.env.CLIENT_DIST ?? path.join(__dirname, '..', 'client', 'dist'),
 
-  aiProvider: (process.env.AI_PROVIDER ?? 'groq').toLowerCase(),
+  aiProvider: (process.env.AI_PROVIDER ?? 'gemini').toLowerCase(),
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY ?? '',
+    baseUrl: (process.env.GEMINI_BASE_URL ?? 'https://generativelanguage.googleapis.com/v1beta/openai').replace(/\\/$/, ''),
+    chatModel: process.env.GEMINI_CHAT_MODEL ?? 'gemini-3.8-flash',
+    visionModel: process.env.GEMINI_VISION_MODEL ?? 'gemini-3.8-flash',
+    timeoutMs: num(process.env.GEMINI_TIMEOUT_MS, 120_000),
+    maxTokens: num(process.env.GEMINI_MAX_TOKENS, 4096),
+    temperature: Number.isFinite(Number(process.env.GEMINI_TEMPERATURE)) ? Number(process.env.GEMINI_TEMPERATURE) : 0.6,
+  },
   groq: {
     apiKey: process.env.GROQ_API_KEY ?? '',
     baseUrl: (process.env.GROQ_BASE_URL ?? 'https://api.groq.com/openai/v1').replace(/\/$/, ''),
