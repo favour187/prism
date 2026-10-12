@@ -31,7 +31,7 @@ export default function App() {
   const [view, setView] = useState('chat');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [model, setModel] = useState(() => localStorage.getItem('prism.model') ?? '');
-  const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('prism.autospeak') !== '0');
+  const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('prism.autospeak') === '1');
   const [toast, setToast] = useState(null);
 
   const abortRef = useRef(null);
@@ -224,7 +224,7 @@ export default function App() {
           } catch {  }
         }
         refreshConversations(search);
-        if (autoSpeak && finalText && ttsSupported()) speak(finalText).catch(() => {});
+        if (voice && finalText && ttsSupported()) speak(finalText).catch(() => {});
       },
     });
 
@@ -271,7 +271,7 @@ export default function App() {
           } catch {  }
         }
         refreshConversations(search);
-        if (autoSpeak && finalText && ttsSupported()) speak(finalText).catch(() => {});
+        // Text and screen answers stay silent; speech is reserved for voice turns.
       },
     });
   }, [activeId, showToast, refreshConversations, search, autoSpeak]);
