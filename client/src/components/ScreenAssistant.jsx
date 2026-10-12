@@ -139,7 +139,9 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
       if (mode === 'region') {
         setAwaitingRegion(frame);
       } else {
-        setPreview(frame.dataUrl);
+        onAnswer?.(frame.dataUrl);
+        setPreview(null);
+        onClose();
       }
     } catch (err) {
       if (err?.name === 'NotAllowedError') {
@@ -195,7 +197,7 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
         <RegionSelector
           frame={awaitingRegion}
           onCancel={() => setAwaitingRegion(null)}
-          onDone={(dataUrl) => { setAwaitingRegion(null); setPreview(dataUrl); }}
+          onDone={(dataUrl) => { setAwaitingRegion(null); onAnswer?.(dataUrl); onClose(); }}
         />
       )}
 
@@ -257,7 +259,7 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
             ) : (
               <div className="capture-preview">
                 <img src={preview} alt="Screenshot preview before sending" className="preview-img" />
-                <p className="preview-label">{watch ? 'Latest Watch shot' : 'Preview — review before sending'}</p>
+                <p className="preview-label">{watch ? 'Latest Watch shot' : 'Captured screen'}</p>
                 <div className="preview-actions">
                   <button className="btn primary" onClick={attach}>Attach to composer</button>
                   {!watch && <button className="btn ghost" onClick={() => setPreview(null)}>Retake</button>}
