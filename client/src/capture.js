@@ -1,6 +1,14 @@
 export async function grabFrame() {
+  // Native Android uses MediaProjection via the app bridge. Android WebView and
+  // mobile browsers do not reliably implement getDisplayMedia().
+  if (isAndroid()) {
+    const dataUrl = await androidCapture('screen');
+    if (!dataUrl) throw new Error('Screen capture was cancelled or unavailable. Try again and approve Android screen-capture permission.');
+    const { width, height } = await imageDimensions(dataUrl);
+    return { dataUrl, width, height };
+  }
   if (!navigator.mediaDevices?.getDisplayMedia) {
-    throw new Error('Screen capture is not supported in this browser (use Chrome/Edge/Firefox desktop).');
+    throw new Error('Screen capture is unavailable here. On Android, open Prism in the installed app; on desktop, use a supported browser over HTTPS.');
   }
   const stream = await navigator.mediaDevices.getDisplayMedia({
     video: { frameRate: { ideal: 1, max: 5 } },
@@ -12,6 +20,15 @@ export async function grabFrame() {
   } finally {
     stream.getTracks().forEach((t) => t.stop());
   }
+}
+
+function imageDimensions(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.naturalWidth || image.width, height: image.naturalHeight || image.height });
+    image.onerror = () => reject(new Error('Could not read the captured frame.'));
+    image.src = dataUrl;
+  });
 }
 
 function frameCanvas(source, w, h) {
@@ -37,6 +54,12 @@ async function frameFromStream(stream, settleMs = 150) {
 }
 
 export async function openCaptureStream() {
+  if (isAndroid()) {
+    throw new Error('Continuous Watch is not supported in this Android capture mode yet. Use Answer now, Full screen, or Region for on-demand capture.');
+  }
+  if (!navigator.mediaDevices?.getDisplayMedia) {
+    throw new Error('Screen Watch is unavailable in this browser. Use a supported desktop browser over HTTPS.');
+  }
   const stream = await navigator.mediaDevices.getDisplayMedia({
     video: { frameRate: { ideal: 5, max: 12 } },
     audio: false,
