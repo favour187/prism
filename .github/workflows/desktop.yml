@@ -1,9 +1,15 @@
 name: Desktop installers
 
 on:
+  # Desktop installers are expensive (three OS runners). Build only for a
+  # version tag or when manually requested, not on every source-code push.
   push:
-    branches: [main]
+    tags:
+      - 'v*'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -11,10 +17,11 @@ env:
 jobs:
   build:
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,4 +46,4 @@ jobs:
         with:
           name: prism-desktop-${{ runner.os }}
           path: desktop/out/*
-          retention-days: 30
+          retention-days: 7
