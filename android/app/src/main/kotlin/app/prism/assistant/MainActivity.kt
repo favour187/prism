@@ -30,6 +30,21 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     companion object {
         @Volatile private var activeActivity: MainActivity? = null
 
+        fun deliverWatchFrame(dataUrl: String) {
+            val activity = activeActivity ?: return
+            activity.runOnUiThread {
+                val jsData = JSONObject.quote(dataUrl)
+                activity.webView?.evaluateJavascript("window.__prismWatchFrame && window.__prismWatchFrame($jsData)", null)
+            }
+        }
+        fun deliverWatchStatus(token: String?, ok: Boolean, message: String) {
+            if (token.isNullOrBlank()) return
+            val activity = activeActivity ?: return
+            activity.runOnUiThread {
+                val jsToken = JSONObject.quote(token); val jsMessage = JSONObject.quote(message)
+                activity.webView?.evaluateJavascript("window.__prismWatchStatus && window.__prismWatchStatus($jsToken,$ok,$jsMessage)", null)
+            }
+        }
         fun deliverCaptureResult(token: String?, dataUrl: String?) {
             if (token.isNullOrBlank()) return
             val activity = activeActivity ?: return
@@ -50,6 +65,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var pendingWebPermissionRequest: PermissionRequest? = null
+    private var audioPermissionRequestedForOverlay = false
 
     private val prefs by lazy { getSharedPreferences("prism", MODE_PRIVATE) }
 
@@ -60,6 +76,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         activeActivity = this
+        audioPermissionRequestedForOverlay = intent?.getBooleanExtra(FloatingService.EXTRA_AUDIO_PERMISSION_REQUEST, false) == true
 
         tts = TextToSpeech(this, this)
 
@@ -74,6 +91,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
         initWebView()
         requestAppPermissions()
+        if (audioPermissionRequestedForOverlay && ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 103)
     }
 
     override fun onInit(status: Int) {
@@ -195,6 +214,10 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 103) {
+            audioPermissionRequestedForOverlay = false
+            FloatingService.resolvePendingAudioPermission(ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+        }
         if (requestCode == 101) {
             val pending = pendingWebPermissionRequest
             pendingWebPermissionRequest = null
@@ -246,6 +269,18 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     fun isEdgeAssistantRunning(): Boolean {
         return FloatingService.isRunning
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent); setIntent(intent)
+        if (intent.getBooleanExtra(FloatingService.EXTRA_AUDIO_PERMISSION_REQUEST, false)) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+                FloatingService.resolvePendingAudioPermission(true)
+            else {
+                audioPermissionRequestedForOverlay = true
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 103)
+            }
+        }
     }
 
     override fun onBackPressed() {

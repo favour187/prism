@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { grabFrame, ScreenWatcher } from '../capture.js';
+import { grabFrame, ScreenWatcher, isAndroid, startAndroidWatch, stopAndroidWatch } from '../capture.js';
 import RegionSelector from './RegionSelector.jsx';
 
 export default function ScreenAssistant({ open, onToggle, onClose, onCapture, onAnswer, onError, onWatchNarrate, streaming }) {
@@ -11,6 +11,9 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
   const watcherRef = useRef(null);
   const narrateRef = useRef(narrate);
   const streamingRef = useRef(streaming);
+  const androidPrevRef = useRef(null);
+  const androidCountRef = useRef(0);
+  const androidTokenRef = useRef(null);
   narrateRef.current = narrate;
   streamingRef.current = streaming;
 
@@ -19,16 +22,83 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
   }, [narrate]);
 
   const stopWatch = () => {
+    if (androidTokenRef.current) {
+      stopAndroidWatch();
+      androidTokenRef.current = null;
+      androidPrevRef.current = null;
+    }
     watcherRef.current?.stop();
     watcherRef.current = null;
     setWatch(null);
   };
 
+  useEffect(() => {
+    if (!isAndroid()) return undefined;
+    window.__prismWatchFrame = (dataUrl) => {
+      if (!androidTokenRef.current || !dataUrl) return;
+      const img = new Image();
+      img.onload = () => {
+        if (!androidTokenRef.current) return;
+        const canvas = document.createElement('canvas');
+        canvas.width = 96;
+        canvas.height = Math.max(32, Math.round(96 * img.height / img.width));
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        const prev = androidPrevRef.current;
+        androidPrevRef.current = pixels;
+        if (!prev) return;
+        let diff = 0; let count = 0;
+        for (let i = 0; i < pixels.length; i += 32) {
+          diff += Math.abs(pixels[i] - prev[i]) + Math.abs(pixels[i + 1] - prev[i + 1]) + Math.abs(pixels[i + 2] - prev[i + 2]);
+          count += 3;
+        }
+        if (count && diff / count > 13) {
+          const n = ++androidCountRef.current;
+          setWatch({ count: n });
+          setPreview(dataUrl);
+          if (narrateRef.current && !streamingRef.current) onWatchNarrate?.(dataUrl, n);
+        }
+      };
+      img.src = dataUrl;
+    };
+    window.__prismWatchStatus = (token, ok, message) => {
+      if (token !== androidTokenRef.current) return;
+      if (!ok) {
+        androidTokenRef.current = null;
+        androidPrevRef.current = null;
+        setWatch(null);
+        onError?.(message || 'Could not start screen Watch.');
+      } else setWatch({ count: 0 });
+    };
+    return () => {
+      delete window.__prismWatchFrame;
+      delete window.__prismWatchStatus;
+    };
+  }, [onError, onWatchNarrate]);
+
   useEffect(() => () => watcherRef.current?.stop(), []);
 
   const toggleWatch = async () => {
-    if (typeof window.prismAndroid?.requestCapture === 'function') {
-      onError?.('Continuous Watch is not available in the Android capture flow yet. Use Answer now or Full screen for a permission-approved snapshot.');
+    if (watcherRef.current || androidTokenRef.current) {
+      const n = watch?.count ?? 0;
+      stopWatch();
+      onError?.(`Watch stopped — ${n} change${n === 1 ? '' : 's'} detected.`);
+      return;
+    }
+    if (isAndroid()) {
+      const token = `w${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+      androidTokenRef.current = token;
+      androidPrevRef.current = null;
+      androidCountRef.current = 0;
+      try {
+        startAndroidWatch(token);
+        setWatch({ count: 0 });
+      } catch (err) {
+        androidTokenRef.current = null;
+        onError?.(err?.message || 'Could not start screen Watch.');
+      }
       return;
     }
     if (watcherRef.current) {
@@ -69,7 +139,9 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
       if (mode === 'region') {
         setAwaitingRegion(frame);
       } else {
-        setPreview(frame.dataUrl);
+        onAnswer?.(frame.dataUrl);
+        setPreview(null);
+        onClose();
       }
     } catch (err) {
       if (err?.name === 'NotAllowedError') {
@@ -125,7 +197,7 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
         <RegionSelector
           frame={awaitingRegion}
           onCancel={() => setAwaitingRegion(null)}
-          onDone={(dataUrl) => { setAwaitingRegion(null); setPreview(dataUrl); }}
+          onDone={(dataUrl) => { setAwaitingRegion(null); onAnswer?.(dataUrl); onClose(); }}
         />
       )}
 
@@ -138,15 +210,14 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
 
           <div className="assistant-body">
             <p className="assistant-note">
-              Nothing is recorded. A single frame is captured only when you pick a mode —
-              or, in Watch, kept only when the screen visibly moves.
+              Prism captures only after you approve Android screen recording. Watch checks for visible changes while active; stop it any time.
             </p>
 
             <div className={`assistant-watch ${watch ? 'on' : ''}`}>
               <button className="capture-mode watch" disabled={Boolean(busy)} onClick={toggleWatch}>
                 <span className="capture-icon">◉</span>
-                <span>{watch ? `Watching · ${watch.count} kept` : (typeof window.prismAndroid?.requestCapture === 'function' ? 'Watch unavailable' : 'Watch the screen')}</span>
-                <small>{watch ? 'click to stop' : (typeof window.prismAndroid?.requestCapture === 'function' ? 'use on-demand capture on Android' : 'keeps a shot only on movement')}</small>
+                <span>{watch ? `Watching · ${watch.count} changes` : 'Watch the screen'}</span>
+                <small>{watch ? 'Tap to stop · captures only when screen changes' : 'keeps a shot only when the screen moves'}</small>
               </button>
               {watch && (
                 <label className="assistant-narrate">
@@ -188,7 +259,7 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
             ) : (
               <div className="capture-preview">
                 <img src={preview} alt="Screenshot preview before sending" className="preview-img" />
-                <p className="preview-label">{watch ? 'Latest Watch shot' : 'Preview — review before sending'}</p>
+                <p className="preview-label">{watch ? 'Latest Watch shot' : 'Captured screen'}</p>
                 <div className="preview-actions">
                   <button className="btn primary" onClick={attach}>Attach to composer</button>
                   {!watch && <button className="btn ghost" onClick={() => setPreview(null)}>Retake</button>}

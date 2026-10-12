@@ -814,17 +814,17 @@ body { letter-spacing: 0.1px; }
 
 .assistant-edge {
   position: fixed; top: 50%; right: 0; transform: translateY(-50%);
-  width: 16px; height: 132px; padding: 0;
+  width: 26px; height: 160px; padding: 0;
   background: transparent; border: 0; cursor: pointer; z-index: 60;
   display: flex; align-items: center; justify-content: flex-end;
 }
 .assistant-edge-line {
-  width: 5px; height: 100%; border-radius: 3px 0 0 3px;
+  width: 8px; height: 100%; border-radius: 5px 0 0 5px;
   background: linear-gradient(180deg, var(--accent), var(--accent-2));
   opacity: .5; transition: width .15s ease, opacity .15s ease;
   box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 30%, transparent);
 }
-.assistant-edge:hover .assistant-edge-line { width: 9px; opacity: 1; }
+.assistant-edge:hover .assistant-edge-line { width: 12px; opacity: 1; }
 .assistant-edge.open .assistant-edge-line { opacity: .95; }
 
 .assistant-watch { display: flex; align-items: center; gap: 12px; margin: 10px 0; flex-wrap: wrap; }
