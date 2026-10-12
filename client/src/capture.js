@@ -54,9 +54,7 @@ async function frameFromStream(stream, settleMs = 150) {
 }
 
 export async function openCaptureStream() {
-  if (isAndroid()) {
-    throw new Error('Continuous Watch is not supported in this Android capture mode yet. Use Answer now, Full screen, or Region for on-demand capture.');
-  }
+  if (isAndroid()) throw new Error('Use the native Watch control in the Screen assistant on Android.');
   if (!navigator.mediaDevices?.getDisplayMedia) {
     throw new Error('Screen Watch is unavailable in this browser. Use a supported desktop browser over HTTPS.');
   }
@@ -184,6 +182,13 @@ export function isDesktop() {
 
 export function isAndroid() {
   return typeof window.prismAndroid?.requestCapture === 'function';
+}
+export function startAndroidWatch(token) {
+  if (typeof window.prismAndroid?.startWatch !== 'function') throw new Error('Native Watch is unavailable in this app version.');
+  window.prismAndroid.startWatch(token);
+}
+export function stopAndroidWatch() {
+  try { window.prismAndroid?.stopWatch?.(); } catch {}
 }
 
 export function androidCapture(kind = 'screen') {
