@@ -54,6 +54,9 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
         const val EXTRA_RESULT_CODE = "resultCode"
         const val EXTRA_RESULT_DATA = "resultData"
         const val ACTION_SHOW_PANEL = "app.prism.assistant.SHOW_PANEL"
+        const val ACTION_REQUEST_CAPTURE = "app.prism.assistant.REQUEST_CAPTURE"
+        const val EXTRA_CAPTURE_KIND = "captureKind"
+        const val EXTRA_CAPTURE_TOKEN = "captureToken"
 
         const val DEFAULT_SERVER = "https://prism-0367.onrender.com"
         private const val NOTIF_ID = 101
@@ -79,6 +82,7 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
     private var webView: WebView? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
+    private var pendingSpeech: String? = null
 
     private var pendingToken: String? = null
     private var projection: MediaProjection? = null
@@ -105,15 +109,20 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts?.language = Locale.getDefault()
-            ttsReady = true
+            val result = tts?.setLanguage(Locale.getDefault())
+            ttsReady = result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED
+            pendingSpeech?.also { pendingSpeech = null; speakText(it) }
         }
     }
 
     fun speakText(text: String) {
-        if (!ttsReady || text.isBlank()) return
+        if (text.isBlank()) return
+        if (!ttsReady) {
+            pendingSpeech = text.take(12000)
+            return
+        }
         tts?.stop()
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "prism_utterance_${System.currentTimeMillis()}")
+        tts?.speak(text.take(12000), TextToSpeech.QUEUE_FLUSH, null, "prism_utterance_${System.currentTimeMillis()}")
     }
 
     fun stopSpeaking() {
@@ -127,6 +136,11 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> showPanel(true)
+            ACTION_REQUEST_CAPTURE -> {
+                val kind = intent.getStringExtra(EXTRA_CAPTURE_KIND) ?: "screen"
+                val token = intent.getStringExtra(EXTRA_CAPTURE_TOKEN)
+                if (!token.isNullOrBlank()) requestCapture(kind, token)
+            }
             ACTION_STOP -> stopSelf()
             ACTION_SHOW_PANEL -> showPanel(true)
             ACTION_CAPTURE_DENIED -> {
@@ -456,6 +470,9 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
     private fun evaluateCaptureResult(token: String?, dataUrl: String?) {
         if (token == null) return
         webView?.evaluateJavascript("window.__prismCaptureResult && window.__prismCaptureResult('$token','${dataUrl ?: ""}')", null)
+        // Also resolve a capture requested by the main app WebView, not only the
+        // floating panel's WebView.
+        MainActivity.deliverCaptureResult(token, dataUrl)
     }
 
     private fun teardownCapture() {
