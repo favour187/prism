@@ -57,6 +57,10 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
         const val ACTION_REQUEST_CAPTURE = "app.prism.assistant.REQUEST_CAPTURE"
         const val EXTRA_CAPTURE_KIND = "captureKind"
         const val EXTRA_CAPTURE_TOKEN = "captureToken"
+        const EXTRA_AUDIO_PERMISSION_REQUEST = "requestAudioPermission"
+        private const val WATCH_FRAME_INTERVAL_MS = 1_200L
+        @Volatile private var activeService: FloatingService? = null
+        fun resolvePendingAudioPermission(granted: Boolean) { activeService?.resolveAudioPermission(granted) }
 
         const val DEFAULT_SERVER = "https://prism-0367.onrender.com"
         private const val NOTIF_ID = 101
@@ -83,8 +87,12 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var pendingSpeech: String? = null
-
+    private var pendingWebAudioRequest: PermissionRequest? = null
     private var pendingToken: String? = null
+    private var pendingCaptureKind: String = "screen"
+    private var watchActive = false
+    private var watchStartedNotified = false
+    private var lastWatchFrameAt = 0L
     private var projection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
@@ -99,6 +107,7 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
     override fun onCreate() {
         super.onCreate()
         isRunning = true
+        activeService = this
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         tts = TextToSpeech(this, this)
@@ -142,6 +151,7 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
                 if (!token.isNullOrBlank()) requestCapture(kind, token)
             }
             ACTION_STOP -> stopSelf()
+            ACTION_STOP_WATCH -> stopWatch()
             ACTION_SHOW_PANEL -> showPanel(true)
             ACTION_CAPTURE_DENIED -> {
                 mainHandler.post { evaluateCaptureResult(token = pendingToken, dataUrl = null) }
@@ -163,6 +173,9 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
 
     override fun onDestroy() {
         isRunning = false
+        if (activeService === this) activeService = null
+        pendingWebAudioRequest?.deny()
+        pendingWebAudioRequest = null
         tts?.stop()
         tts?.shutdown()
         tts = null
@@ -301,7 +314,15 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
                         this@FloatingService, Manifest.permission.RECORD_AUDIO,
                     ) == PackageManager.PERMISSION_GRANTED
                     mainHandler.post {
-                        if (wantsAudio && osGranted) request.grant(request.resources) else request.deny()
+                        if (!wantsAudio) request.deny()
+                        else if (osGranted) request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+                        else {
+                            pendingWebAudioRequest?.deny()
+                            pendingWebAudioRequest = request
+                            startActivity(Intent(this@FloatingService, MainActivity::class.java)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                                .putExtra(EXTRA_AUDIO_PERMISSION_REQUEST, true))
+                        }
                     }
                 }
             }
@@ -365,18 +386,39 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
 
     fun requestCapture(kind: String, token: String) {
         mainHandler.post {
-            if (pendingToken != null) {
-                evaluateCaptureResult(token, null)
-                return@post
-            }
+            if (pendingToken != null || watchActive) { evaluateCaptureResult(token, null); return@post }
             pendingToken = token
+            pendingCaptureKind = kind
+            watchStartedNotified = false
             mainHandler.removeCallbacks(timeoutRunnable)
             mainHandler.postDelayed(timeoutRunnable, CAPTURE_TIMEOUT_MS)
             showPanel(false)
-            startActivity(
-                Intent(this, CapturePermissionActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
+            startActivity(Intent(this, CapturePermissionActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
+
+    fun stopWatch() {
+        mainHandler.post {
+            if (!watchActive && pendingCaptureKind != "watch") return@post
+            watchActive = false
+            pendingCaptureKind = "screen"
+            watchStartedNotified = false
+            pendingToken = null
+            mainHandler.removeCallbacks(timeoutRunnable)
+            teardownCapture()
+            goForeground(SpecialUse)
+        }
+    }
+
+    fun resolveAudioPermission(granted: Boolean) {
+        mainHandler.post {
+            val request = pendingWebAudioRequest
+            pendingWebAudioRequest = null
+            if (request != null) {
+                if (granted && ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+                    request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+                else request.deny()
+            }
         }
     }
 
@@ -402,14 +444,35 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
                 cappedH = (h * scaleDown).roundToInt()
             } else { cappedW = w; cappedH = h }
 
-            val reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
+            val reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 3)
             imageReader = reader
             reader.setOnImageAvailableListener({ r ->
-                if (captureDone) return@setOnImageAvailableListener
+                if (captureDone && !watchActive && pendingCaptureKind != "watch") return@setOnImageAvailableListener
                 val image = try { r.acquireLatestImage() } catch (_: Exception) { null }
                 val bmp = image?.let { imageToBitmap(it, cappedW, cappedH) }
                 image?.close()
-                finishCapture(bmp, timedOut = false)
+                if (bmp == null) {
+                    if (!watchActive && pendingCaptureKind != "watch") finishCapture(null, timedOut = false)
+                    return@setOnImageAvailableListener
+                }
+                if (pendingCaptureKind == "watch" || watchActive) {
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    if (now - lastWatchFrameAt >= WATCH_FRAME_INTERVAL_MS) {
+                        lastWatchFrameAt = now
+                        val frame = bmp.toJpegDataUrl()
+                        bmp.recycle()
+                        if (!watchStartedNotified) {
+                            watchStartedNotified = true; watchActive = true; captureDone = false
+                            val token = pendingToken; pendingToken = null
+                            mainHandler.removeCallbacks(timeoutRunnable)
+                            mainHandler.post { evaluateWatchStatus(token, true, "") }
+                        }
+                        mainHandler.post {
+                            webView?.evaluateJavascript("window.__prismWatchFrame && window.__prismWatchFrame(${org.json.JSONObject.quote(frame)})", null)
+                            MainActivity.deliverWatchFrame(frame)
+                        }
+                    } else bmp.recycle()
+                } else finishCapture(bmp, timedOut = false)
             }, captureHandler)
 
             virtualDisplay = mp.createVirtualDisplay(
@@ -443,6 +506,7 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
     }
 
     private fun finishCapture(bitmap: Bitmap?, timedOut: Boolean) {
+        if (watchActive) return
         if (captureDone) return
         captureDone = true
         val token = pendingToken
@@ -457,6 +521,12 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
     }
 
     private fun onCaptureFailed() {
+        if (pendingCaptureKind == "watch") {
+            val token = pendingToken; pendingToken = null; pendingCaptureKind = "screen"; watchActive = false
+            mainHandler.removeCallbacks(timeoutRunnable); teardownCapture()
+            mainHandler.post { evaluateWatchStatus(token, false, "Screen capture could not start. Try Watch again and approve Android screen recording.") }
+            return
+        }
         val token = pendingToken
         pendingToken = null
         mainHandler.removeCallbacks(timeoutRunnable)
@@ -465,6 +535,15 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
             evaluateCaptureResult(token, null)
             showPanel(true)
         }
+    }
+
+    private fun evaluateWatchStatus(token: String?, ok: Boolean, message: String) {
+        if (token == null) return
+        val jsToken = org.json.JSONObject.quote(token)
+        val jsMessage = org.json.JSONObject.quote(message)
+        val script = "window.__prismWatchStatus && window.__prismWatchStatus($jsToken,$ok,$jsMessage)"
+        webView?.evaluateJavascript(script, null)
+        MainActivity.deliverWatchStatus(token, ok, message)
     }
 
     private fun evaluateCaptureResult(token: String?, dataUrl: String?) {
@@ -521,6 +600,10 @@ class PrismJsBridge(private val service: FloatingService) {
 
     @android.webkit.JavascriptInterface
     fun requestCapture(kind: String, token: String) = service.requestCapture(kind, token)
+    @android.webkit.JavascriptInterface
+    fun startWatch(token: String) = service.requestCapture("watch", token)
+    @android.webkit.JavascriptInterface
+    fun stopWatch() = service.stopWatch()
 
     @android.webkit.JavascriptInterface
     fun getPlatform(): String = "android"
