@@ -7,6 +7,11 @@ on:
       - 'android/**'
       - 'client/**'
       - '.github/workflows/android.yml'
+  pull_request:
+    paths:
+      - 'android/**'
+      - 'client/**'
+      - '.github/workflows/android.yml'
   workflow_dispatch:
 
 permissions:
