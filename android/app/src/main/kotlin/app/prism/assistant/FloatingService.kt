@@ -57,7 +57,8 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
         const val ACTION_REQUEST_CAPTURE = "app.prism.assistant.REQUEST_CAPTURE"
         const val EXTRA_CAPTURE_KIND = "captureKind"
         const val EXTRA_CAPTURE_TOKEN = "captureToken"
-        const EXTRA_AUDIO_PERMISSION_REQUEST = "requestAudioPermission"
+        const val EXTRA_AUDIO_PERMISSION_REQUEST = "requestAudioPermission"
+        const val ACTION_STOP_WATCH = "app.prism.assistant.STOP_WATCH"
         private const val WATCH_FRAME_INTERVAL_MS = 1_200L
         @Volatile private var activeService: FloatingService? = null
         fun resolvePendingAudioPermission(granted: Boolean) { activeService?.resolveAudioPermission(granted) }
@@ -154,9 +155,16 @@ class FloatingService : Service(), TextToSpeech.OnInitListener {
             ACTION_STOP_WATCH -> stopWatch()
             ACTION_SHOW_PANEL -> showPanel(true)
             ACTION_CAPTURE_DENIED -> {
-                mainHandler.post { evaluateCaptureResult(token = pendingToken, dataUrl = null) }
+                val token = pendingToken
+                val wasWatch = pendingCaptureKind == "watch"
                 pendingToken = null
-                showPanel(true)
+                pendingCaptureKind = "screen"
+                mainHandler.removeCallbacks(timeoutRunnable)
+                mainHandler.post {
+                    if (wasWatch) evaluateWatchStatus(token, false, "Screen recording permission was not granted.")
+                    else evaluateCaptureResult(token, null)
+                    showPanel(true)
+                }
             }
             ACTION_PROJECTION_GRANTED -> {
                 val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
