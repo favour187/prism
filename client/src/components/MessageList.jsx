@@ -87,16 +87,32 @@ const Message = memo(function Message({ msg, onCodeAction, onRegenerate, onSpeak
         </div>
         {!isUser && (
           <div className="msg-actions">
-            <button className="msg-action" title="Copy this answer" onClick={copyMessage}>
+            <button
+              className="msg-action"
+              title="Copy this answer"
+              aria-label={copied ? 'Answer copied' : 'Copy this answer'}
+              onClick={copyMessage}
+            >
               {copied ? '✓ Copied' : '⧉ Copy'}
             </button>
             {onSpeak && ttsSupported() && (
-              <button className="msg-action" title={isSpeaking ? 'Stop speaking' : 'Read this answer aloud'} onClick={onSpeak}>
+              <button
+                className="msg-action"
+                title={isSpeaking ? 'Stop speaking' : 'Read this answer aloud'}
+                aria-label={isSpeaking ? 'Stop reading this answer' : 'Read this answer aloud'}
+                aria-pressed={isSpeaking}
+                onClick={onSpeak}
+              >
                 {isSpeaking ? '■ Stop voice' : '🔊 Read aloud'}
               </button>
             )}
             {onRegenerate && (
-              <button className="msg-action" title="Regenerate this answer" onClick={() => onRegenerate(msg)}>
+              <button
+                className="msg-action"
+                title="Regenerate this answer"
+                aria-label="Regenerate this answer"
+                onClick={() => onRegenerate(msg)}
+              >
                 ↻ Regenerate
               </button>
             )}
@@ -109,7 +125,7 @@ const Message = memo(function Message({ msg, onCodeAction, onRegenerate, onSpeak
 
 function StreamingMessage({ stream, onCodeAction, onRetry = null }) {
   return (
-    <article className="msg msg-assistant">
+    <article className="msg msg-assistant" aria-busy={!stream.text && !stream.error}>
       <div className="msg-avatar streaming" aria-hidden="true">◮</div>
       <div className="msg-body">
         <div className="msg-meta">
@@ -237,7 +253,13 @@ export default function MessageList({
       {empty
         ? fullEmpty
         : (
-          <div className="msg-list">
+          <div
+            className="msg-list"
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions text"
+            aria-label="Conversation"
+          >
             {messages.map((m, i) => {
               const isLastAssistant =
                 m.role === 'assistant' && i === messages.length - 1;

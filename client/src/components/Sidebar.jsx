@@ -62,7 +62,15 @@ export default function Sidebar({
   return (
     <>
       {open && <div className="sidebar-scrim" onClick={onClose} aria-hidden="true" />}
-      <aside className={`sidebar ${open ? 'open' : 'closed'}`} aria-label="Conversations">
+      <aside
+        id="sidebar"
+        className={`sidebar ${open ? 'open' : 'closed'}`}
+        aria-label="Conversations"
+        aria-hidden={!open}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' && onClose) onClose();
+        }}
+      >
         <div className="sidebar-top">
           <div className="brand">
             <span className="brand-mark" aria-hidden="true">◮</span>
@@ -104,12 +112,24 @@ export default function Sidebar({
                 <div
                   key={c.id}
                   role="listitem"
+                  tabIndex={editing === c.id ? -1 : 0}
+                  aria-current={c.id === activeId ? 'true' : undefined}
+                  aria-label={`Open conversation “${c.title}”`}
                   className={`convo-item ${c.id === activeId ? 'active' : ''}`}
                   onClick={() => onSelect(c.id)}
+                  onKeyDown={(e) => {
+                    // Only act when the row itself has focus — nested buttons handle their own keys.
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelect(c.id);
+                    }
+                  }}
                 >
                   {editing === c.id ? (
                     <input
                       className="rename-input"
+                      aria-label={`Rename “${c.title}”`}
                       value={draft}
                       autoFocus
                       onChange={(e) => setDraft(e.target.value)}
@@ -130,6 +150,7 @@ export default function Sidebar({
                         <button
                           className="icon-btn"
                           title="Rename"
+                          aria-label={`Rename “${c.title}”`}
                           onClick={(e) => {
                             e.stopPropagation();
                             setEditing(c.id);
@@ -141,6 +162,7 @@ export default function Sidebar({
                         <button
                           className="icon-btn danger"
                           title="Delete"
+                          aria-label={`Delete “${c.title}”`}
                           onClick={(e) => {
                             e.stopPropagation();
                             if (confirm(`Delete “${c.title}”? This cannot be undone.`)) onDelete(c.id);

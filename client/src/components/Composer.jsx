@@ -276,8 +276,9 @@ export default function Composer({
       <div className="composer">
         <div className="composer-tools">
           <button className="tool-btn" title="Attach development files (code, PDF, DOCX, images)"
+            aria-label="Attach files"
             onClick={() => fileRef.current?.click()} disabled={disabled}>
-            📎
+            <span aria-hidden="true">📎</span>
           </button>
           <input
             ref={fileRef}
@@ -291,17 +292,20 @@ export default function Composer({
             }}
           />
           <button className="tool-btn" title="Capture your screen (Ctrl/⌘+Shift+A)"
+            aria-label="Capture your screen"
             onClick={onOpenAssistant} disabled={disabled}>
-            📸
+            <span aria-hidden="true">📸</span>
           </button>
           {voiceSupported() && (
             <button
               className={`tool-btn mic ${mic === 'recording' ? 'recording' : ''}`}
               title={mic === 'recording' ? 'Stop — transcribes and sends your answer' : mic === 'transcribing' ? 'Transcribing…' : 'Tap to talk (voice input)'}
+              aria-label={mic === 'recording' ? 'Stop recording and transcribe' : mic === 'transcribing' ? 'Transcribing' : 'Record a voice message'}
+              aria-pressed={mic === 'recording'}
               onClick={toggleMic}
               disabled={disabled && mic === 'idle'}
             >
-              {mic === 'recording' ? '⏺' : mic === 'transcribing' ? '…' : '🎤'}
+              <span aria-hidden="true">{mic === 'recording' ? '⏺' : mic === 'transcribing' ? '…' : '🎤'}</span>
             </button>
           )}
           <span className="tool-sep" />
@@ -310,6 +314,7 @@ export default function Composer({
               key={a.id}
               className={`action-chip ${pendingAction?.action === a.id ? 'active' : ''}`}
               title={a.hint}
+              aria-pressed={pendingAction?.action === a.id}
               disabled={disabled}
               onClick={() => (pendingAction?.action === a.id ? onClearAction() : onAction(a.id))}
             >
@@ -334,11 +339,14 @@ export default function Composer({
         />
 
         {streaming ? (
-          <button className="send-btn stop" onClick={onStop} title="Stop generating">■</button>
+          <button className="send-btn stop" onClick={onStop} title="Stop generating" aria-label="Stop generating">■</button>
         ) : (
-          <button className="send-btn" onClick={submit} disabled={!hasContent} title="Send">➤</button>
+          <button className="send-btn" onClick={submit} disabled={!hasContent} title="Send" aria-label="Send message">➤</button>
         )}
       </div>
+      <p className="sr-only" role="status" aria-live="polite">
+        {mic === 'recording' ? 'Recording' : mic === 'transcribing' ? 'Transcribing your voice' : ''}
+      </p>
       <div className="composer-foot">
         <span>Prism can make mistakes — verify code before shipping. Screens are captured only on demand.</span>
       </div>

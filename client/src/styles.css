@@ -1083,3 +1083,125 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ==========================================================================
+   Responsive & accessibility layer
+   --------------------------------------------------------------------------
+   Focus visibility, touch targets, safe areas (notches / Android gesture bar /
+   desktop titlebar), small-screen layout, motion preferences, and the same
+   guarantees on the overlay (?overlay=1) and write-bar (?writebar) surfaces.
+   ========================================================================== */
+
+/* --- Visually hidden but announced (composer voice status) --- */
+.sr-only {
+  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+/* --- Skip link: first tab stop, out of sight until focused --- */
+.skip-link {
+  position: fixed; top: 0; left: 50%; z-index: 200;
+  transform: translate(-50%, -140%);
+  padding: 10px 18px; border-radius: 0 0 12px 12px;
+  background: var(--accent); color: #fff; font-size: 13px; font-weight: 650;
+  text-decoration: none; box-shadow: var(--shadow);
+  transition: transform .16s ease;
+}
+.skip-link:focus { transform: translate(-50%, 0); outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
+/* --- Focus rings for every custom control --- */
+.convo-item:focus-visible, .suggestion-btn:focus-visible, .chip-x:focus-visible,
+.ov-btn:focus-visible, .ov-chip:focus-visible, .suggestion.clickable:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent-2); outline-offset: 2px; border-radius: var(--radius-sm);
+}
+.convo-item:focus-visible { background: var(--bg-3); }
+.msg:focus-within .msg-actions { opacity: 1; }
+
+/* --- Row actions must be reachable without hovering --- */
+.convo-item:focus-within .convo-actions { display: flex; }
+@media (hover: none), (pointer: coarse) {
+  .convo-actions { display: flex; }
+  .msg-actions { opacity: 1; }
+}
+
+/* --- Comfortable touch targets on coarse pointers --- */
+@media (pointer: coarse) {
+  .icon-btn, .tool-btn, .ov-btn { min-width: 44px; min-height: 44px; }
+  .msg-action, .chip-x { min-height: 38px; }
+  .convo-item { min-height: 48px; }
+  .send-btn { min-width: 46px; min-height: 46px; }
+}
+
+/* --- Safe areas: notched phones, home indicator, Android gesture bar --- */
+.chat-header { padding-top: max(10px, env(safe-area-inset-top)); }
+.composer-wrap {
+  padding-bottom: max(6px, env(safe-area-inset-bottom));
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
+.sidebar { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+.overlay-app, .wb-app { padding-bottom: env(safe-area-inset-bottom); }
+
+/* --- Don't rubber-band the page while scrolling a transcript --- */
+.chat-scroll, .ov-messages { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+
+/* --- Phones --- */
+@media (max-width: 480px) {
+  .chat-header { min-height: 56px; gap: 6px; padding-inline: 10px; }
+  .chat-title { font-size: 14px; }
+  .model-select { max-width: 112px; font-size: 11px; }
+  .view-tabs { padding: 8px 10px 0; }
+  .welcome { padding: 26px 14px 18px; }
+  .welcome h2 { font-size: 24px; }
+  .welcome-badge { width: 48px; height: 48px; }
+  .msg { gap: 9px; margin-bottom: 22px; }
+  .msg-avatar { width: 28px; height: 28px; font-size: 11px; }
+  .msg-content { font-size: 13.5px; }
+  /* Tools scroll sideways instead of wrapping into the message box */
+  .composer-tools {
+    gap: 4px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; scrollbar-width: none;
+  }
+  .composer-tools::-webkit-scrollbar { display: none; }
+  .composer-tools > * { flex-shrink: 0; }
+  .action-chip { padding: 6px 9px; font-size: 11px; }
+  .assistant-panel { right: 8px; left: 8px; bottom: 120px; width: auto; }
+  .toast { left: 10px; right: 10px; }
+}
+
+/* --- Tablets and small laptops --- */
+@media (max-width: 768px) {
+  .msg-list { max-width: 100%; }
+  .suggestions { grid-template-columns: 1fr; }
+  .composer, .composer-tools { max-width: 100%; }
+}
+
+/* --- Desktops: widen the reading column instead of stretching lines --- */
+@media (min-width: 1280px) {
+  .msg-list { max-width: 860px; }
+  .composer, .composer-tools { max-width: 900px; }
+  .welcome { width: min(1000px, 100%); }
+}
+
+/* --- Keyboard focus must not land under a sticky edge --- */
+.chat-scroll, .convo-list { scroll-padding-block: 12px; }
+
+/* --- Reduced motion: stop the looping indicators too --- */
+@media (prefers-reduced-motion: reduce) {
+  .msg-avatar.streaming, .caret, .thinking-dots i, .spinner { animation: none !important; }
+  .skip-link { transition: none; }
+  .icon-btn:hover, .btn:hover, .msg-action:hover { transform: none; }
+}
+
+/* --- Landscape phones: keep the input visible --- */
+@media (max-height: 480px) and (orientation: landscape) {
+  .chat-header { min-height: 48px; }
+  .welcome { padding-top: 16px; }
+  .suggestions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* --- Windows high-contrast / forced colors --- */
+@media (forced-colors: active) {
+  .provider-pill, .msg-badge, .suggestion, .chip { border: 1px solid CanvasText; }
+  .skip-link { border: 2px solid CanvasText; }
+}

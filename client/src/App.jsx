@@ -501,6 +501,7 @@ export default function App() {
 
   return (
     <div className={`app ${sidebarOpen ? 'with-sidebar' : ''}`}>
+      <a className="skip-link" href="#main">Skip to conversation</a>
       <Sidebar
         conversations={conversations}
         activeId={activeId}
@@ -516,7 +517,7 @@ export default function App() {
         onClose={() => setSidebarOpen(false)}
       />
 
-      <main className="main">
+      <main className="main" id="main" tabIndex={-1}>
         <ChatHeader
           title={activeTitle}
           sidebarOpen={sidebarOpen}

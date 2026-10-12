@@ -16,6 +16,14 @@ export default function ChatHeader({
   const models = cfg?.models?.length ? cfg.models : [];
   const defaultModel = cfg?.defaults?.chatModel;
   const current = model || defaultModel || 'default';
+  const provider = cfg?.provider;
+  const providerLabel = !provider
+    ? 'the server'
+    : provider.id === 'mock'
+      ? 'the demo model'
+      : provider.ready
+        ? provider.id
+        : 'an unconfigured provider';
   const [edgeActive, setEdgeActive] = useState(() => isAndroid() && isEdgeRunning());
 
   useEffect(() => {
@@ -43,7 +51,9 @@ export default function ChatHeader({
           className="icon-btn"
           onClick={onToggleSidebar}
           title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-          aria-label="Toggle sidebar"
+          aria-label={sidebarOpen ? 'Hide conversations' : 'Show conversations'}
+          aria-expanded={sidebarOpen}
+          aria-controls="sidebar"
         >
           ☰
         </button>
@@ -55,7 +65,7 @@ export default function ChatHeader({
           className="model-select"
           value={current}
           onChange={(e) => onModelChange(e.target.value === defaultModel ? '' : e.target.value)}
-          title="Chat model (Featherless)"
+          title={`Chat model — served by ${providerLabel}`}
           aria-label="Chat model"
         >
           {!models.length && <option value={current}>{current}</option>}
@@ -92,7 +102,8 @@ export default function ChatHeader({
             className="icon-btn"
             onClick={onToggleSpeak}
             title={speakOn ? 'Voice answers ON — click to mute' : 'Voice answers OFF — click to hear answers'}
-            aria-label="Toggle voice answers"
+            aria-label="Voice answers"
+            aria-pressed={speakOn}
           >
             {speakOn ? '🔊' : '🔇'}
           </button>
@@ -102,7 +113,8 @@ export default function ChatHeader({
           className="icon-btn"
           onClick={onToggleTheme}
           title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
-          aria-label="Toggle theme"
+          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+          aria-pressed={theme === 'light'}
         >
           {theme === 'dark' ? '☀︎' : '☾'}
         </button>
