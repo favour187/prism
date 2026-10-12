@@ -14,6 +14,7 @@ import voiceRouter from './routes/voice.js';
 import systemRouter from './routes/system.js';
 import { getProvider } from './providers/index.js';
 import store from './memory/store.js';
+import { attachLiveVoice } from './liveVoice.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -28,7 +29,7 @@ app.use(
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'blob:'],
         mediaSrc: ["'self'", 'blob:'],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", 'ws:', 'wss:'],
         fontSrc: ["'self'", 'data:'],
         objectSrc: ["'none'"],
         frameAncestors: ["'self'"],
@@ -81,6 +82,7 @@ const server = app.listen(config.port, config.host, () => {
     console.warn(`[prism] WARNING: ${provider.notReadyReason()} Chat calls will return 503 until configured.`);
   }
 });
+attachLiveVoice(server);
 
 function shutdown(signal) {
   console.log(`[prism] ${signal} received — shutting down gracefully.`);

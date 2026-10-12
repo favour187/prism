@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { VoiceRecorder, transcribe, voiceSupported, ttsSupported } from '../voice.js';
+import { startGeminiLive } from '../liveVoice.js';
 
 const FALLBACK_STYLES = [
   { id: 'fix', label: 'Fix grammar' },
@@ -52,6 +53,7 @@ export default function Composer({
 }) {
   const [text, setText] = useState('');
   const [mic, setMic] = useState('idle');
+  const [liveStatus, setLiveStatus] = useState('idle');
   const [styles, setStyles] = useState(FALLBACK_STYLES);
   const [styleBusy, setStyleBusy] = useState(null);
   const [writeState, setWriteState] = useState(null);
@@ -59,8 +61,34 @@ export default function Composer({
   const taRef = useRef(null);
   const fileRef = useRef(null);
   const recorderRef = useRef(null);
+  const liveSessionRef = useRef(null);
 
   const desktop = window.prismDesktop ?? null;
+
+  useEffect(() => {
+    return () => { liveSessionRef.current?.stop?.(); };
+  }, []);
+
+  const toggleLiveVoice = async () => {
+    if (liveStatus !== 'idle') {
+      await liveSessionRef.current?.stop?.();
+      liveSessionRef.current = null;
+      setLiveStatus('idle');
+      return;
+    }
+    setLiveStatus('connecting');
+    try {
+      const session = await startGeminiLive({
+        onStatus: (status) => setLiveStatus(status),
+        onError: (err) => onToast?.(err.message || 'Gemini Live voice failed.', 'error'),
+      });
+      liveSessionRef.current = session;
+    } catch (err) {
+      liveSessionRef.current = null;
+      setLiveStatus('idle');
+      onToast?.(err.message || 'Could not start Gemini Live voice.', 'error');
+    }
+  };
 
   useEffect(() => {
     api.listWriteStyles().then((d) => d.styles?.length && setStyles(d.styles)).catch(() => {});
@@ -296,6 +324,16 @@ export default function Composer({
             onClick={onOpenAssistant} disabled={disabled}>
             <span aria-hidden="true">📸</span>
           </button>
+          <button
+            className={`tool-btn mic ${liveStatus !== 'idle' ? 'recording' : ''}`}
+            title={liveStatus === 'idle' ? 'Start Gemini Live voice conversation' : 'Stop live voice conversation'}
+            aria-label={liveStatus === 'idle' ? 'Start Gemini Live voice conversation' : 'Stop live voice conversation'}
+            aria-pressed={liveStatus !== 'idle'}
+            onClick={toggleLiveVoice}
+            disabled={disabled && liveStatus === 'idle'}
+          >
+            <span aria-hidden="true">{liveStatus === 'speaking' ? '🔊' : liveStatus === 'listening' ? '🎙️' : liveStatus === 'connecting' ? '…' : liveStatus === 'stopping' ? '…' : '🗣️'}</span>
+          </button>
           {voiceSupported() && (
             <button
               className={`tool-btn mic ${mic === 'recording' ? 'recording' : ''}`}
@@ -345,7 +383,7 @@ export default function Composer({
         )}
       </div>
       <p className="sr-only" role="status" aria-live="polite">
-        {mic === 'recording' ? 'Recording' : mic === 'transcribing' ? 'Transcribing your voice' : ''}
+        {liveStatus !== 'idle' ? `Gemini Live: ${liveStatus}` : mic === 'recording' ? 'Recording' : mic === 'transcribing' ? 'Transcribing your voice' : ''}
       </p>
       <div className="composer-foot">
         <span>Prism can make mistakes — verify code before shipping. Screens are captured only on demand.</span>
