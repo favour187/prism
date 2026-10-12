@@ -3,11 +3,19 @@ name: Android APK
 on:
   push:
     branches: [main]
+    paths:
+      - 'android/**'
+      - 'client/**'
+      - '.github/workflows/android.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,30 +26,19 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Verify Android SDK
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          ls "$ANDROID_HOME/platforms" | head -10
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-read-only: false
 
       - name: Grant wrapper permission
         run: chmod +x android/gradlew
 
-      - name: Run unit tests
+      - name: Test and build debug APK
         working-directory: android
-        run: ./gradlew testDebugUnitTest --stacktrace --no-daemon
-
-      - name: Build debug APK
-        working-directory: android
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
+        run: ./gradlew testDebugUnitTest assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: prism-android-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30
+          retention-days: 7
