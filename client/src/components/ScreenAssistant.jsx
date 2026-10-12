@@ -27,6 +27,10 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
   useEffect(() => () => watcherRef.current?.stop(), []);
 
   const toggleWatch = async () => {
+    if (typeof window.prismAndroid?.requestCapture === 'function') {
+      onError?.('Continuous Watch is not available in the Android capture flow yet. Use Answer now or Full screen for a permission-approved snapshot.');
+      return;
+    }
     if (watcherRef.current) {
       const n = watch?.count ?? 0;
       stopWatch();
@@ -141,8 +145,8 @@ export default function ScreenAssistant({ open, onToggle, onClose, onCapture, on
             <div className={`assistant-watch ${watch ? 'on' : ''}`}>
               <button className="capture-mode watch" disabled={Boolean(busy)} onClick={toggleWatch}>
                 <span className="capture-icon">◉</span>
-                <span>{watch ? `Watching · ${watch.count} kept` : 'Watch the screen'}</span>
-                <small>{watch ? 'click to stop' : 'keeps a shot only on movement'}</small>
+                <span>{watch ? `Watching · ${watch.count} kept` : (typeof window.prismAndroid?.requestCapture === 'function' ? 'Watch unavailable' : 'Watch the screen')}</span>
+                <small>{watch ? 'click to stop' : (typeof window.prismAndroid?.requestCapture === 'function' ? 'use on-demand capture on Android' : 'keeps a shot only on movement')}</small>
               </button>
               {watch && (
                 <label className="assistant-narrate">
