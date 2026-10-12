@@ -20,7 +20,7 @@ export function attachLiveVoice(server) {
     if (origin) {
       try {
         if (new URL(origin).host !== req.headers.host) {
-          socket.write('HTTP/1.1 403 Forbidden\\r\\nConnection: close\\r\\n\\r\\n');
+          socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
           socket.destroy();
           return;
         }
