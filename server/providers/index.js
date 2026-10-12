@@ -48,18 +48,38 @@ class GeminiWithGroqFallback {
       Array.isArray(m.content) && m.content.some((part) => part?.type === 'image_url'));
     if (this.primary.isReady()) {
       let emittedText = false;
+      // Guard against a primary that accepts the connection and then goes quiet
+      // (capacity 503s on the streaming endpoint behave this way). Once the first
+      // token lands the deadline is cleared, so long answers are never cut short.
+      const stall = new AbortController();
+      let stalled = false;
+      const stallTimer = setTimeout(() => {
+        stalled = true;
+        stall.abort();
+      }, config.gemini.firstTokenTimeoutMs);
+      const primarySignal = opts.signal
+        ? AbortSignal.any([opts.signal, stall.signal])
+        : stall.signal;
       try {
         for await (const chunk of this.primary.streamChat({
           ...opts,
           model: opts.model || config.gemini.chatModel,
+          signal: primarySignal,
         })) {
-          if (chunk.delta) emittedText = true;
+          if (chunk.delta && !emittedText) {
+            emittedText = true;
+            clearTimeout(stallTimer);
+          }
           yield chunk;
         }
         return;
       } catch (err) {
-        if (emittedText || opts.signal?.aborted || err?.code === 'CLIENT_ABORTED') throw err;
-        // Fall through to Groq when Gemini is unavailable, rate-limited, or rejects the request.
+        // A user cancel must never trigger a backup request.
+        if (emittedText || opts.signal?.aborted) throw err;
+        if (err?.code === 'CLIENT_ABORTED' && !stalled) throw err;
+        // Otherwise (stall, timeout, 429, 5xx) fall through to Groq.
+      } finally {
+        clearTimeout(stallTimer);
       }
     }
     if (!this.backup.isReady()) {

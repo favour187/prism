@@ -20,9 +20,13 @@ const config = {
   gemini: {
     apiKey: process.env.GEMINI_API_KEY ?? '',
     baseUrl: (process.env.GEMINI_BASE_URL ?? 'https://generativelanguage.googleapis.com/v1beta/openai').replace(/\/$/, ''),
-    chatModel: process.env.GEMINI_CHAT_MODEL ?? 'gemini-3.8-flash',
-    visionModel: process.env.GEMINI_VISION_MODEL ?? 'gemini-3.8-flash',
+    chatModel: process.env.GEMINI_CHAT_MODEL ?? 'gemini-3.5-flash',
+    visionModel: process.env.GEMINI_VISION_MODEL ?? 'gemini-3.5-flash',
     timeoutMs: num(process.env.GEMINI_TIMEOUT_MS, 120_000),
+    // How long the primary may sit silent before the backup takes over. Gemini can
+    // answer a streaming request with a capacity 503 that keeps the connection open,
+    // so without this the user waits out the full timeout with an empty bubble.
+    firstTokenTimeoutMs: num(process.env.GEMINI_FIRST_TOKEN_TIMEOUT_MS, 15_000),
     maxTokens: num(process.env.GEMINI_MAX_TOKENS, 4096),
     temperature: Number.isFinite(Number(process.env.GEMINI_TEMPERATURE)) ? Number(process.env.GEMINI_TEMPERATURE) : 0.6,
   },

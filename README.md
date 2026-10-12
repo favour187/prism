@@ -111,7 +111,7 @@ Without a disk, everything still works — data is just ephemeral per deploy.
 | Variable | Default | Purpose |
 |---|---|---|
 | `GEMINI_API_KEY` | — | Primary model API key (server-side secret) |\n| `GROQ_API_KEY` | — | Backup model + Whisper API key (server-side secret) |
-| `GEMINI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | Gemini OpenAI-compatible endpoint |\n| `GEMINI_CHAT_MODEL` / `GEMINI_VISION_MODEL` | `gemini-3.8-flash` | Primary chat and vision model |\n| `GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | Groq OpenAI-compatible endpoint |
+| `GEMINI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | Gemini OpenAI-compatible endpoint |\n| `GEMINI_CHAT_MODEL` / `GEMINI_VISION_MODEL` | `gemini-3.5-flash` | Primary chat and vision model |\n| `GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | Groq OpenAI-compatible endpoint |
 | `GROQ_CHAT_MODEL` | `qwen/qwen3.8-27b` | Backup chat model |
 | `GROQ_VISION_MODEL` | `qwen/qwen3.8-27b` | Backup vision model for screenshots/images |
 | `GROQ_STT_MODEL` | `whisper-large-v3-turbo` | Speech-to-text model |
@@ -122,7 +122,25 @@ Without a disk, everything still works — data is just ephemeral per deploy.
 | `HISTORY_MESSAGES` | `24` | Memory window per conversation |
 | `MAX_CONTEXT_FILES_CHARS`, `MAX_FILE_CHARS` | `180000`, `40000` | File context budgets |
 | `RATE_LIMIT_*` | see `.env.example` | Rate limiting tiers |
+| `GEMINI_FIRST_TOKEN_TIMEOUT_MS` | `15000` | How long the primary may sit silent before the Groq backup takes over |
 | `CORS_ORIGINS` | — | Extra origins when the frontend is hosted elsewhere |
+
+### When the primary model is unavailable
+
+Gemini occasionally answers a request with a capacity `503` ("This model is currently
+experiencing high demand"), and the streaming endpoint can hold that connection open
+rather than failing fast. Two things keep Prism usable when that happens:
+
+1. **First-token deadline.** If the primary produces no token within
+   `GEMINI_FIRST_TOKEN_TIMEOUT_MS` (default 15 s), the request is cancelled and retried
+   on Groq. The timer is cleared by the first token, so a long answer is never cut short.
+2. **Automatic backup.** Any pre-output failure (429, 5xx, timeout, stall) falls through
+   to Groq, and the UI is told via a notice. A user pressing Stop still cancels outright —
+   a cancel never triggers a backup request.
+
+Model availability varies over time. If a model name starts returning 404 ("no longer
+available") or sustained 503s, point `GEMINI_CHAT_MODEL` / `GEMINI_VISION_MODEL` at
+another one from `GET https://generativelanguage.googleapis.com/v1beta/models?key=…`.
 
 ## API overview
 
