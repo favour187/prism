@@ -314,7 +314,7 @@ export default function App() {
           } catch {  }
         }
         refreshConversations(search);
-        if (autoSpeak && finalText && ttsSupported()) speak(finalText).catch(() => {});
+        // Keep text, screen, and regenerated answers silent; only voice turns are spoken.
       },
     }, model || null);
   }, [stream, activeId, model, showToast, refreshConversations, search, autoSpeak]);
@@ -367,7 +367,7 @@ export default function App() {
               setMessages(data.messages);
             } catch {  }
           }
-          if (autoSpeak && finalText && ttsSupported()) speak(finalText).catch(() => {});
+          // Keep text, screen, and regenerated answers silent; only voice turns are spoken.
         },
       },
     );
@@ -437,7 +437,7 @@ export default function App() {
             } catch {  }
           }
           refreshConversations(search);
-          if (autoSpeak && finalText && ttsSupported()) speak(finalText).catch(() => {});
+          // Keep text, screen, and regenerated answers silent; only voice turns are spoken.
         },
       },
     );
