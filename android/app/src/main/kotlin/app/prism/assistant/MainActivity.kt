@@ -23,13 +23,33 @@ import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.util.Locale
+import org.json.JSONObject
 
 class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
+    companion object {
+        @Volatile private var activeActivity: MainActivity? = null
+
+        fun deliverCaptureResult(token: String?, dataUrl: String?) {
+            if (token.isNullOrBlank()) return
+            val activity = activeActivity ?: return
+            activity.runOnUiThread {
+                val jsToken = JSONObject.quote(token)
+                val jsData = JSONObject.quote(dataUrl ?: "")
+                activity.webView?.evaluateJavascript(
+                    "window.__prismCaptureResult && window.__prismCaptureResult($jsToken, $jsData)",
+                    null,
+                )
+            }
+        }
+    }
+
+    private var pendingSpeech: String? = null
     private lateinit var container: FrameLayout
     private var webView: WebView? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
+    private var pendingWebPermissionRequest: PermissionRequest? = null
 
     private val prefs by lazy { getSharedPreferences("prism", MODE_PRIVATE) }
 
@@ -39,6 +59,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        activeActivity = this
 
         tts = TextToSpeech(this, this)
 
@@ -57,15 +78,28 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts?.language = Locale.getDefault()
-            ttsReady = true
+            val result = tts?.setLanguage(Locale.getDefault())
+            ttsReady = result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED
+            pendingSpeech?.also { pendingSpeech = null; speakText(it) }
         }
     }
 
     fun speakText(text: String) {
-        if (!ttsReady || text.isBlank()) return
+        if (text.isBlank()) return
+        if (!ttsReady) {
+            pendingSpeech = text.take(12000)
+            return
+        }
         tts?.stop()
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "prism_main_${System.currentTimeMillis()}")
+        tts?.speak(text.take(12000), TextToSpeech.QUEUE_FLUSH, null, "prism_main_${System.currentTimeMillis()}")
+    }
+
+    fun requestCapture(kind: String, token: String) {
+        val intent = Intent(this, FloatingService::class.java)
+            .setAction(FloatingService.ACTION_REQUEST_CAPTURE)
+            .putExtra(FloatingService.EXTRA_CAPTURE_KIND, kind)
+            .putExtra(FloatingService.EXTRA_CAPTURE_TOKEN, token)
+        ContextCompat.startForegroundService(this, intent)
     }
 
     fun stopSpeaking() {
@@ -107,17 +141,21 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     ) == PackageManager.PERMISSION_GRANTED
 
                     runOnUiThread {
-                        if (wantsAudio && osGranted) {
-                            request.grant(request.resources)
-                        } else if (wantsAudio && !osGranted) {
+                        if (!wantsAudio) {
+                            request.deny()
+                        } else if (osGranted) {
+                            request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+                        } else {
+                            // Keep the WebView permission request pending until the Android
+                            // runtime permission dialog returns. Denying it immediately makes
+                            // the first microphone attempt fail even when the user grants access.
+                            pendingWebPermissionRequest?.deny()
+                            pendingWebPermissionRequest = request
                             ActivityCompat.requestPermissions(
                                 this@MainActivity,
                                 arrayOf(Manifest.permission.RECORD_AUDIO),
                                 101,
                             )
-                            request.deny()
-                        } else {
-                            request.deny()
                         }
                     }
                 }
@@ -149,6 +187,29 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
         )
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 101) {
+            val pending = pendingWebPermissionRequest
+            pendingWebPermissionRequest = null
+            if (pending != null) {
+                val granted = ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.RECORD_AUDIO,
+                ) == PackageManager.PERMISSION_GRANTED
+                if (granted) {
+                    pending.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+                } else {
+                    pending.deny()
+                }
+            }
+        }
     }
 
     private fun requestAppPermissions() {
@@ -197,6 +258,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     override fun onDestroy() {
+        if (activeActivity === this) activeActivity = null
+        pendingWebPermissionRequest?.deny()
+        pendingWebPermissionRequest = null
         tts?.stop()
         tts?.shutdown()
         tts = null
@@ -211,6 +275,11 @@ class MainAppJsBridge(private val activity: MainActivity) {
 
     @android.webkit.JavascriptInterface
     fun getPlatform(): String = "android"
+
+    @android.webkit.JavascriptInterface
+    fun requestCapture(kind: String, token: String) {
+        activity.runOnUiThread { activity.requestCapture(kind, token) }
+    }
 
     @android.webkit.JavascriptInterface
     fun startEdgeAssistant(): Boolean {
