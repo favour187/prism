@@ -49,6 +49,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var webView: WebView? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
+    private var pendingWebPermissionRequest: PermissionRequest? = null
 
     private val prefs by lazy { getSharedPreferences("prism", MODE_PRIVATE) }
 
@@ -140,17 +141,21 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     ) == PackageManager.PERMISSION_GRANTED
 
                     runOnUiThread {
-                        if (wantsAudio && osGranted) {
-                            request.grant(request.resources)
-                        } else if (wantsAudio && !osGranted) {
+                        if (!wantsAudio) {
+                            request.deny()
+                        } else if (osGranted) {
+                            request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+                        } else {
+                            // Keep the WebView permission request pending until the Android
+                            // runtime permission dialog returns. Denying it immediately makes
+                            // the first microphone attempt fail even when the user grants access.
+                            pendingWebPermissionRequest?.deny()
+                            pendingWebPermissionRequest = request
                             ActivityCompat.requestPermissions(
                                 this@MainActivity,
                                 arrayOf(Manifest.permission.RECORD_AUDIO),
                                 101,
                             )
-                            request.deny()
-                        } else {
-                            request.deny()
                         }
                     }
                 }
@@ -182,6 +187,29 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
         )
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 101) {
+            val pending = pendingWebPermissionRequest
+            pendingWebPermissionRequest = null
+            if (pending != null) {
+                val granted = ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.RECORD_AUDIO,
+                ) == PackageManager.PERMISSION_GRANTED
+                if (granted) {
+                    pending.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+                } else {
+                    pending.deny()
+                }
+            }
+        }
     }
 
     private fun requestAppPermissions() {
@@ -231,6 +259,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onDestroy() {
         if (activeActivity === this) activeActivity = null
+        pendingWebPermissionRequest?.deny()
+        pendingWebPermissionRequest = null
         tts?.stop()
         tts?.shutdown()
         tts = null
